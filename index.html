@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pt-PT" data-theme="dark">
 <head>
@@ -46,6 +45,15 @@
               <span id="mapHint">
                 Clica no mapa para adicionar pontos.
               </span>
+            </div>
+
+            <div class="map-toolbar-actions">
+              <label for="mapType">Estilo do mapa</label>
+              <select id="mapType">
+                <option value="satellite" selected>Satélite</option>
+                <option value="street">Mapa de rua</option>
+                <option value="terrain">Terreno</option>
+              </select>
             </div>
           </div>
 
@@ -186,13 +194,6 @@
             <option value="forest">Forest — natureza</option>
             <option value="ocean">Ocean — azul</option>
             <option value="sunset">Sunset — rosa</option>
-          </select>
-
-          <label for="mapType">Estilo do mapa</label>
-          <select id="mapType">
-            <option value="satellite" selected>Satélite</option>
-            <option value="street">Mapa de rua</option>
-            <option value="terrain">Terreno</option>
           </select>
         </section>
 
