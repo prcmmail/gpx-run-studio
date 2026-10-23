@@ -1,4 +1,3 @@
-
 /* ==========================================================
    GPX RUN STUDIO
    Percursos, pesquisa de localidades, pontos, altimetria e GPX
@@ -436,7 +435,7 @@
         "&countrycodes=pt" +
         "&limit=7" +
         "&accept-language=pt" +
-        `&q=${encodeURIComponent(query)}`;
+        &q=${encodeURIComponent(query)};
 
       lastSearchTime = Date.now();
 
@@ -478,7 +477,7 @@
       renderLocationSuggestions(searchResults);
 
       setLocationSearchMessage(
-        `${searchResults.length} sugestões encontradas. Seleciona uma para centrar o mapa.`
+        ${searchResults.length} sugestões encontradas. Seleciona uma para centrar o mapa.
       );
     } catch (error) {
       if (error.name === "AbortError") return;
@@ -647,16 +646,16 @@
     hideLocationSuggestions();
 
     setLocationSearchMessage(
-      `Mapa centrado em ${title}${subtitle ? ` — ${subtitle}` : ""}.`
+      Mapa centrado em ${title}${subtitle ?  — ${subtitle} : ""}.
     );
 
     setStatus(
-      `Mapa centrado em ${title}. Os pontos do percurso foram preservados.`
+      Mapa centrado em ${title}. Os pontos do percurso foram preservados.
     );
 
     if (el.mapHint) {
       el.mapHint.textContent =
-        `Localização: ${title}. Clica no mapa para adicionar pontos ao percurso.`;
+        Localização: ${title}. Clica no mapa para adicionar pontos ao percurso.;
     }
 
     // Atualiza o tamanho do mapa sem mexer nos pontos existentes.
@@ -861,10 +860,10 @@
 
     if (el.mapHint) {
       el.mapHint.textContent =
-        `Ponto ${index + 1} selecionado. Podes eliminá-lo ou arrastá-lo.`;
+        Ponto ${index + 1} selecionado. Podes eliminá-lo ou arrastá-lo.;
     }
 
-    setStatus(`Ponto ${index + 1} selecionado.`);
+    setStatus(Ponto ${index + 1} selecionado.);
   }
 
   function updateMarkers() {
@@ -906,7 +905,7 @@
         updateStats();
         updateEditButtons();
 
-        setStatus(`Ponto ${index + 1} reposicionado.`);
+        setStatus(Ponto ${index + 1} reposicionado.);
       });
 
       markers.push(marker);
@@ -935,10 +934,10 @@
 
     if (el.mapHint) {
       el.mapHint.textContent =
-        `Ponto ${points.length} adicionado. Clica num marcador para o selecionar.`;
+        Ponto ${points.length} adicionado. Clica num marcador para o selecionar.;
     }
 
-    setStatus(`Ponto ${points.length} adicionado ao percurso.`);
+    setStatus(Ponto ${points.length} adicionado ao percurso.);
   }
 
   function removePoint(index) {
@@ -1082,7 +1081,7 @@
 
   function updateStats() {
     if (el.distance) {
-      el.distance.textContent = `${formatNumber(calculateDistanceKm())} km`;
+      el.distance.textContent = ${formatNumber(calculateDistanceKm())} km;
     }
 
     if (el.pointCount) el.pointCount.textContent = String(points.length);
@@ -1108,7 +1107,7 @@
 
     if (el.altitudeRange) {
       el.altitudeRange.textContent =
-        `${formatNumber(min, 0)} / ${formatNumber(max, 0)} m`;
+        ${formatNumber(min, 0)} / ${formatNumber(max, 0)} m;
     }
 
     let totalAscent = 0;
@@ -1126,8 +1125,8 @@
       else totalDescent += Math.abs(difference);
     }
 
-    if (el.ascent) el.ascent.textContent = `${formatNumber(totalAscent, 0)} m`;
-    if (el.descent) el.descent.textContent = `${formatNumber(totalDescent, 0)} m`;
+    if (el.ascent) el.ascent.textContent = ${formatNumber(totalAscent, 0)} m;
+    if (el.descent) el.descent.textContent = ${formatNumber(totalDescent, 0)} m;
   }
 
   function updateEditButtons() {
@@ -1221,7 +1220,7 @@
     }
 
     setStatus(
-      `Percurso ${routeType === "circular" ? "circular" : "linear"} criado.`
+      Percurso ${routeType === "circular" ? "circular" : "linear"} criado.
     );
   }
 
@@ -1295,8 +1294,8 @@
 
         const url =
           "https://api.open-meteo.com/v1/elevation" +
-          `?latitude=${encodeURIComponent(latitude)}` +
-          `&longitude=${encodeURIComponent(longitude)}`;
+          ?latitude=${encodeURIComponent(latitude)} +
+          &longitude=${encodeURIComponent(longitude)};
 
         const response = await fetch(url);
 
@@ -1361,7 +1360,7 @@
     const totalDistance = calculateDistanceKm();
 
     if (el.chartDistance) {
-      el.chartDistance.textContent = `${formatNumber(totalDistance)} km`;
+      el.chartDistance.textContent = ${formatNumber(totalDistance)} km;
     }
 
     if (points.length < 2) {
@@ -1426,15 +1425,15 @@
     });
 
     const linePath = coords.map((point, index) =>
-      `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`
+      ${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}
     ).join(" ");
 
     const bottomY = height - padding.bottom;
 
     const areaPath =
-      `${linePath} ` +
-      `L ${coords[coords.length - 1].x} ${bottomY} ` +
-      `L ${coords[0].x} ${bottomY} Z`;
+      ${linePath}  +
+      L ${coords[coords.length - 1].x} ${bottomY}  +
+      L ${coords[0].x} ${bottomY} Z;
 
     const color = themeColors[currentTheme] || "#ff7a18";
 
@@ -1495,7 +1494,7 @@
       const elevation = altitudes[index];
 
       const elevationTag = Number.isFinite(elevation)
-        ? `<ele>${elevation.toFixed(1)}</ele>`
+        ? <ele>${elevation.toFixed(1)}</ele>
         : "";
 
       return `
@@ -1665,7 +1664,7 @@
         "GPX importado. Clica num marcador para selecionar um ponto.";
     }
 
-    setStatus(`GPX importado: ${points.length} pontos.`);
+    setStatus(GPX importado: ${points.length} pontos.);
   }
 
   function addImportButton() {
@@ -1756,4 +1755,3 @@
     init();
   }
 })();
-
