@@ -1,865 +1,410 @@
 
-/* =========================================================
-   GPX RUN STUDIO
-   Folha de estilos principal
-   ========================================================= */
-
-/* 1. VARIÁVEIS */
-
-:root {
-  color-scheme: dark;
-
-  --bg: #101419;
-  --surface: #191f27;
-  --surface-2: #202833;
-  --border: #303a47;
-  --text: #f2f5f8;
-  --muted: #9aa7b5;
-  --accent: #42d392;
-  --accent-hover: #2fc181;
-  --danger: #ff6464;
-  --warning: #f2c14e;
-  --map-bg: #151c24;
-
-  --sidebar-width: 310px;
-  --radius: 14px;
-  --shadow: 0 6px 22px rgba(0, 0, 0, 0.16);
-}
-
-/* 2. TEMAS */
-
-:root[data-theme="dark"],
-body[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #101419;
-  --surface: #191f27;
-  --surface-2: #202833;
-  --border: #303a47;
-  --text: #f2f5f8;
-  --muted: #9aa7b5;
-  --accent: #42d392;
-  --accent-hover: #2fc181;
-  --danger: #ff6464;
-  --warning: #f2c14e;
-  --map-bg: #151c24;
-}
-
-:root[data-theme="light"],
-body[data-theme="light"] {
-  color-scheme: light;
-  --bg: #edf1f5;
-  --surface: #ffffff;
-  --surface-2: #f4f7fa;
-  --border: #d7dfe8;
-  --text: #1b2733;
-  --muted: #687786;
-  --accent: #16865a;
-  --accent-hover: #0d7049;
-  --danger: #d93636;
-  --warning: #b78000;
-  --map-bg: #e5ebf0;
-}
-
-:root[data-theme="garmin"],
-body[data-theme="garmin"] {
-  color-scheme: dark;
-  --bg: #111511;
-  --surface: #1b211b;
-  --surface-2: #252e24;
-  --border: #394538;
-  --text: #f1f5ed;
-  --muted: #a3b09e;
-  --accent: #b8e14b;
-  --accent-hover: #a4cd35;
-  --danger: #ff6666;
-  --warning: #e8c34d;
-  --map-bg: #151c15;
-}
-
-:root[data-theme="strava"],
-body[data-theme="strava"] {
-  color-scheme: dark;
-  --bg: #171311;
-  --surface: #231b18;
-  --surface-2: #30231e;
-  --border: #49352b;
-  --text: #fff5ef;
-  --muted: #c1a99b;
-  --accent: #fc6b35;
-  --accent-hover: #e85b28;
-  --danger: #ff6969;
-  --warning: #f2c14e;
-  --map-bg: #201915;
-}
-
-:root[data-theme="midnight"],
-body[data-theme="midnight"] {
-  color-scheme: dark;
-  --bg: #0c1020;
-  --surface: #141a2e;
-  --surface-2: #1c2540;
-  --border: #303b60;
-  --text: #edf1ff;
-  --muted: #9ca9cb;
-  --accent: #8b9dff;
-  --accent-hover: #7388f5;
-  --danger: #ff6d91;
-  --warning: #f1d36b;
-  --map-bg: #10162a;
-}
-
-:root[data-theme="forest"],
-body[data-theme="forest"] {
-  color-scheme: dark;
-  --bg: #101914;
-  --surface: #19251d;
-  --surface-2: #223328;
-  --border: #344b39;
-  --text: #eef7ef;
-  --muted: #a4bba7;
-  --accent: #62d68a;
-  --accent-hover: #49bd72;
-  --danger: #ff7272;
-  --warning: #e9cb60;
-  --map-bg: #142019;
-}
-
-:root[data-theme="ocean"],
-body[data-theme="ocean"] {
-  color-scheme: dark;
-  --bg: #0c171e;
-  --surface: #14232d;
-  --surface-2: #1b303d;
-  --border: #2e4a5a;
-  --text: #edf8ff;
-  --muted: #9db7c6;
-  --accent: #45c9e8;
-  --accent-hover: #2ab2d2;
-  --danger: #ff727b;
-  --warning: #f2ce65;
-  --map-bg: #10202a;
-}
-
-:root[data-theme="sunset"],
-body[data-theme="sunset"] {
-  color-scheme: dark;
-  --bg: #1b1219;
-  --surface: #281a26;
-  --surface-2: #372234;
-  --border: #56354b;
-  --text: #fff1f8;
-  --muted: #c9a6bb;
-  --accent: #ff8c69;
-  --accent-hover: #f27450;
-  --danger: #ff626f;
-  --warning: #f4cf67;
-  --map-bg: #211520;
-}
-
-/* 3. RESET */
-
-* {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  width: 100%;
-  height: 100%;
-  margin: 0;
-}
-
-body {
-  overflow: hidden;
-  background: var(--bg);
-  color: var(--text);
-  font-family: Inter, "Segoe UI", Arial, sans-serif;
-  font-size: 14px;
-  line-height: 1.5;
-  transition: background 0.2s ease, color 0.2s ease;
-}
-
-button,
-input,
-select,
-textarea {
-  font: inherit;
-}
-
-button,
-select {
-  cursor: pointer;
-}
-
-button {
-  padding: 9px 12px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--surface-2);
-  color: var(--text);
-  transition: background 0.18s ease, border-color 0.18s ease;
-}
-
-button:hover:not(:disabled) {
-  border-color: var(--accent);
-}
-
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-input,
-select,
-textarea {
-  width: 100%;
-  min-width: 0;
-  padding: 10px 11px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  outline: none;
-  background: var(--surface-2);
-  color: var(--text);
-}
-
-input:focus,
-select:focus,
-textarea:focus {
-  border-color: var(--accent);
-}
-
-select option {
-  background: var(--surface);
-  color: var(--text);
-}
-
-.hidden {
-  display: none !important;
-}
-
-/* 4. APLICAÇÃO */
-
-.app {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100vh;
-  height: 100dvh;
-  min-width: 0;
-  overflow: hidden;
-}
-
-/* 5. CABEÇALHO */
-
-.app-header {
-  z-index: 20;
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  min-height: 76px;
-  padding: 12px 22px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.brand {
-  min-width: 0;
-}
-
-.brand h1 {
-  margin: 0;
-  font-size: 21px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-}
-
-.brand p {
-  margin: 3px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.header-badge {
-  padding: 6px 9px;
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.8px;
-}
-
-.primary-button {
-  border-color: transparent;
-  background: var(--accent);
-  color: #08140e;
-  font-weight: 750;
-}
-
-.primary-button:hover:not(:disabled) {
-  background: var(--accent-hover);
-}
-
-.secondary-button {
-  background: var(--surface-2);
-  color: var(--text);
-}
-
-.full-width {
-  display: flex;
-  width: 100%;
-  justify-content: center;
-}
-
-/* 6. ÁREA CENTRAL
-   Mapa à esquerda, ferramentas à direita. */
-
-.app-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.map-column {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-/* 7. PAINÉIS */
-
-.panel {
-  min-width: 0;
-  margin: 12px;
-  padding: 18px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow);
-}
-
-.panel h2 {
-  margin: 0 0 14px;
-  font-size: 15px;
-  font-weight: 750;
-}
-
-.panel label {
-  display: block;
-  margin: 12px 0 6px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.panel label:first-of-type {
-  margin-top: 0;
-}
-
-.panel-subtitle {
-  margin: 4px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-/* 8. BARRA DO MAPA */
-
-.map-panel {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  margin: 0;
-  overflow: hidden;
-  background: var(--map-bg);
-}
-
-.map-toolbar {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 54px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.map-toolbar-info {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-width: 0;
-}
-
-.map-toolbar-info strong {
-  font-size: 13px;
-}
-
-#mapHint {
-  color: var(--muted);
-  font-size: 11px;
-}
-
-/* Mantém compatibilidade se a barra de seleção ainda existir. */
-
-.map-toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.map-toolbar-actions label {
-  margin: 0;
-  white-space: nowrap;
-}
-
-.map-toolbar-actions select {
-  width: auto;
-  min-width: 125px;
-}
-
-/* 9. MAPA LEAFLET */
-
-#map {
-  flex: 1 1 auto;
-  width: 100%;
-  min-width: 0;
-  min-height: 250px;
-  background: var(--map-bg);
-}
-
-.leaflet-container {
-  width: 100%;
-  height: 100%;
-  background: var(--map-bg);
-  font-family: inherit;
-}
-
-.leaflet-control-zoom a {
-  border-color: var(--border) !important;
-  background: var(--surface) !important;
-  color: var(--text) !important;
-}
-
-.leaflet-control-attribution {
-  background: var(--surface) !important;
-  color: var(--muted) !important;
-}
-
-.leaflet-control-attribution a {
-  color: var(--accent) !important;
-}
-
-.leaflet-popup-content-wrapper,
-.leaflet-popup-tip {
-  background: var(--surface);
-  color: var(--text);
-}
-
-/* 10. ALTIMETRIA */
-
-.elevation-panel {
-  flex: 0 0 auto;
-  margin: 0;
-  padding: 16px;
-  border-top: 1px solid var(--border);
-  border-right: 0;
-  border-bottom: 0;
-  border-left: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
-
-.panel-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.panel-heading h2 {
-  margin-bottom: 0;
-}
-
-.elevation-icon {
-  color: var(--accent);
-  font-size: 20px;
-}
-
-.chart-summary {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin: 10px 0;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.chart-summary strong {
-  color: var(--text);
-}
-
-.elevation-chart {
-  min-height: 48px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.elevation-chart p {
-  margin: 10px 0;
-}
-
-.elevation-chart canvas,
-.elevation-chart svg {
-  display: block;
-  width: 100%;
-  max-width: 100%;
-}
-
-.elevation-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-#elevationStatus {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-/* 11. BARRA LATERAL */
-
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  min-width: 0;
-  min-height: 0;
-  padding: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  border-left: 1px solid var(--border);
-  background: var(--bg);
-  overscroll-behavior: contain;
-}
-
-.sidebar > .panel {
-  flex: 0 0 auto;
-  margin: 10px;
-  padding: 16px;
-}
-
-.sidebar > .panel h2 {
-  margin-bottom: 12px;
-}
-
-.sidebar > .panel select {
-  min-height: 40px;
-}
-
-/* 12. CONFIGURAÇÃO DO PERCURSO */
-
-#routeType {
-  margin-bottom: 8px;
-}
-
-#createRouteBtn {
-  min-height: 40px;
-}
-
-.edit-actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 7px;
-}
-
-.edit-actions button {
-  flex: 1 1 0;
-  min-width: 0;
-  padding: 8px 7px;
-  font-size: 12px;
-}
-
-#clearRouteBtn {
-  margin-top: 7px;
-}
-
-.help-text {
-  margin: 12px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.65;
-}
-
-/* 13. RESUMO DO PERCURSO */
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.stat-card {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-  min-width: 0;
-  min-height: 62px;
-  padding: 11px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface-2);
-}
-
-.stat-card span {
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.4;
-}
-
-.stat-card strong {
-  color: var(--text);
-  font-size: 14px;
-  overflow-wrap: anywhere;
-}
-
-.stat-primary {
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
-}
-
-.stat-primary strong {
-  color: var(--accent);
-}
-
-.stat-wide {
-  grid-column: 1 / -1;
-}
-
-/* 14. APARÊNCIA
-   Tema visual e estilo do mapa no mesmo painel. */
-
-#themeSelect,
-#mapType {
-  display: block;
-  width: 100%;
-  min-height: 40px;
-}
-
-#themeSelect {
-  margin-bottom: 12px;
-}
-
-#mapType {
-  margin-bottom: 2px;
-}
-
-/* 15. MENSAGEM DE ESTADO */
-
-.status-message {
-  flex: 0 0 auto;
-  margin: 0 10px 10px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--surface-2);
-  color: var(--muted);
-  font-size: 11px;
-}
-
-/* 16. RODAPÉ */
-
-.app-footer {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 30px;
-  padding: 5px 16px;
-  border-top: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 10px;
-}
-
-/* 17. BARRAS DE DESLOCAÇÃO */
-
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
-}
-
-*::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
-}
-
-*::-webkit-scrollbar-thumb {
-  border-radius: 10px;
-  background: var(--border);
-}
-
-*::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-/* 18. ECRÃS MÉDIOS */
-
-@media (max-width: 1050px) {
-  :root {
-    --sidebar-width: 290px;
-  }
-
-  .app-header {
-    padding-right: 14px;
-    padding-left: 14px;
-  }
-
-  .sidebar > .panel {
-    margin: 8px;
-    padding: 13px;
-  }
-
-  .elevation-panel {
-    padding: 13px;
-  }
-}
-
-/* 19. TABLETS E TELEMÓVEIS */
-
-@media (max-width: 760px) {
-  body {
-    overflow: auto;
-  }
-
-  .app {
-    height: auto;
-    min-height: 100dvh;
-    overflow: visible;
-  }
-
-  .app-header {
-    align-items: flex-start;
-    flex-wrap: wrap;
-    gap: 10px;
-    padding: 12px;
-  }
-
-  .brand h1 {
-    font-size: 19px;
-  }
-
-  .header-actions {
-    justify-content: flex-start;
-    width: 100%;
-  }
-
-  .app-layout {
-    grid-template-columns: minmax(0, 1fr);
-    flex: 0 0 auto;
-    overflow: visible;
-  }
-
-  .map-column {
-    min-height: 0;
-    overflow: visible;
-  }
-
-  .map-panel {
-    min-height: 55vh;
-  }
-
-  #map {
-    flex: 0 0 auto;
-    height: 48vh;
-    min-height: 320px;
-  }
-
-  .elevation-panel {
-    border-bottom: 1px solid var(--border);
-  }
-
-  .sidebar {
-    overflow: visible;
-    border-top: 1px solid var(--border);
-    border-left: 0;
-  }
-
-  .sidebar > .panel {
-    margin: 10px;
-    padding: 16px;
-  }
-
-  .status-message {
-    margin: 0 10px 10px;
-  }
-
-  .app-footer {
-    flex-wrap: wrap;
-  }
-}
-
-/* 20. TELEMÓVEIS PEQUENOS */
-
-@media (max-width: 420px) {
-  .header-badge {
-    display: none;
-  }
-
-  .header-actions {
-    gap: 6px;
-  }
-
-  .header-actions button {
-    flex: 1 1 auto;
-  }
-
-  .map-toolbar {
-    align-items: flex-start;
-    padding: 10px;
-  }
-
-  .map-toolbar-info {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 3px;
-  }
-
-  .stats-grid {
-    gap: 7px;
-  }
-
-  .stat-card {
-    padding: 9px;
-  }
-
-  .stat-card strong {
-    font-size: 13px;
-  }
-
-  .elevation-footer {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-}
+<!DOCTYPE html>
+<html lang="pt-PT" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#101419">
+
+  <title>GPX Run Studio</title>
+
+  <!-- Leaflet: estilos do mapa -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    crossorigin=""
+  >
+
+  <!-- Estilos da aplicação -->
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body data-theme="dark">
+
+  <div class="app">
+
+    <!-- =====================================================
+         CABEÇALHO
+         ===================================================== -->
+
+    <header class="app-header">
+
+      <div class="brand">
+        <h1>GPX Run Studio</h1>
+        <p>Desenha. Explora. Corre.</p>
+      </div>
+
+      <div class="header-actions">
+
+        <span class="header-badge">
+          ROUTE PLANNER
+        </span>
+
+        <button
+          id="newRouteBtn"
+          type="button"
+          class="secondary-button"
+        >
+          + Novo percurso
+        </button>
+
+        <button
+          id="exportBtn"
+          type="button"
+          class="primary-button"
+        >
+          ↓ Exportar GPX
+        </button>
+
+      </div>
+
+    </header>
+
+    <!-- =====================================================
+         ÁREA PRINCIPAL
+         ===================================================== -->
+
+    <main class="app-layout">
+
+      <!-- ===================================================
+           COLUNA DO MAPA E ALTIMETRIA
+           =================================================== -->
+
+      <div class="map-column">
+
+        <!-- Mapa -->
+
+        <section class="map-panel">
+
+          <div class="map-toolbar">
+
+            <div class="map-toolbar-info">
+
+              <strong>Mapa do percurso</strong>
+
+              <span id="mapHint">
+                Clica no mapa para adicionar pontos.
+              </span>
+
+            </div>
+
+          </div>
+
+          <div
+            id="map"
+            aria-label="Mapa interativo do percurso"
+          ></div>
+
+        </section>
+
+        <!-- Altimetria -->
+
+        <section class="panel elevation-panel">
+
+          <div class="panel-heading">
+
+            <div>
+              <h2>Altimetria</h2>
+
+              <p class="panel-subtitle">
+                Perfil de elevação do percurso
+              </p>
+            </div>
+
+            <span class="elevation-icon">↗</span>
+
+          </div>
+
+          <div class="chart-summary">
+
+            <span>Distância do perfil</span>
+
+            <strong id="chartDistance">
+              0,00 km
+            </strong>
+
+          </div>
+
+          <div
+            id="elevationChart"
+            class="elevation-chart"
+          >
+            <p>
+              Cria um percurso e carrega a altimetria.
+            </p>
+          </div>
+
+          <div class="elevation-footer">
+
+            <span id="elevationStatus">
+              À espera de um percurso.
+            </span>
+
+            <button
+              id="loadElevationBtn"
+              type="button"
+              class="secondary-button"
+            >
+              Carregar altimetria
+            </button>
+
+          </div>
+
+        </section>
+
+      </div>
+
+      <!-- ===================================================
+           BARRA LATERAL
+           =================================================== -->
+
+      <aside class="sidebar">
+
+        <!-- Configuração do percurso -->
+
+        <section class="panel">
+
+          <h2>Configuração do percurso</h2>
+
+          <label for="routeType">
+            Tipo de percurso
+          </label>
+
+          <select id="routeType">
+
+            <option value="linear">
+              Linear — percurso de ida
+            </option>
+
+            <option value="circular">
+              Circular — circuito
+            </option>
+
+          </select>
+
+          <button
+            id="createRouteBtn"
+            type="button"
+            class="primary-button full-width"
+          >
+            Criar percurso
+          </button>
+
+          <div class="edit-actions">
+
+            <button
+              id="deletePointBtn"
+              type="button"
+              class="secondary-button"
+              disabled
+            >
+              Eliminar ponto
+            </button>
+
+            <button
+              id="undoBtn"
+              type="button"
+              class="secondary-button"
+              disabled
+            >
+              ↶ Voltar atrás
+            </button>
+
+          </div>
+
+          <button
+            id="clearRouteBtn"
+            type="button"
+            class="secondary-button full-width"
+            disabled
+          >
+            Limpar pontos
+          </button>
+
+          <p class="help-text">
+            Clica no mapa para adicionar pontos. Clica num
+            marcador para o selecionar: ficará vermelho.
+            Usa «Eliminar ponto» para o apagar. Arrasta os
+            marcadores para os mover ou clica com o botão
+            direito para eliminar. «Voltar atrás» recupera
+            a última alteração.
+          </p>
+
+        </section>
+
+        <!-- Resumo do percurso -->
+
+        <section class="panel">
+
+          <h2>Resumo do percurso</h2>
+
+          <div class="stats-grid">
+
+            <div class="stat-card stat-primary">
+
+              <span>Distância</span>
+
+              <strong id="distance">
+                0,00 km
+              </strong>
+
+            </div>
+
+            <div class="stat-card">
+
+              <span>Altitude min. / máx.</span>
+
+              <strong id="altitudeRange">
+                — / — m
+              </strong>
+
+            </div>
+
+            <div class="stat-card">
+
+              <span>Descida acumulada</span>
+
+              <strong id="descent">
+                — m
+              </strong>
+
+            </div>
+
+            <div class="stat-card">
+
+              <span>Subida acumulada</span>
+
+              <strong id="ascent">
+                — m
+              </strong>
+
+            </div>
+
+            <div class="stat-card stat-wide">
+
+              <span>Pontos do percurso</span>
+
+              <strong id="pointCount">
+                0
+              </strong>
+
+            </div>
+
+          </div>
+
+        </section>
+
+        <!-- Aparência -->
+
+        <section class="panel">
+
+          <h2>Aparência</h2>
+
+          <label for="themeSelect">
+            Tema visual
+          </label>
+
+          <select id="themeSelect">
+
+            <option value="dark">
+              Dark — desportivo
+            </option>
+
+            <option value="light">
+              Light — claro
+            </option>
+
+            <option value="garmin">
+              Garmin — verde
+            </option>
+
+            <option value="strava">
+              Strava — laranja
+            </option>
+
+            <option value="midnight">
+              Midnight — violeta
+            </option>
+
+            <option value="forest">
+              Forest — natureza
+            </option>
+
+            <option value="ocean">
+              Ocean — azul
+            </option>
+
+            <option value="sunset">
+              Sunset — rosa
+            </option>
+
+          </select>
+
+          <label for="mapType">
+            Estilo do mapa
+          </label>
+
+          <select id="mapType">
+
+            <option value="satellite" selected>
+              Satélite
+            </option>
+
+            <option value="street">
+              Mapa de rua
+            </option>
+
+            <option value="terrain">
+              Terreno
+            </option>
+
+          </select>
+
+        </section>
+
+        <!-- Mensagens da aplicação -->
+
+        <p
+          id="status"
+          class="status-message"
+          role="status"
+          aria-live="polite"
+        >
+          Pronto para criar um percurso.
+        </p>
+
+      </aside>
+
+    </main>
+
+    <!-- =====================================================
+         RODAPÉ
+         ===================================================== -->
+
+    <footer class="app-footer">
+
+      <span>GPX Run Studio</span>
+
+      <span>
+        Planeia o teu próximo desafio.
+      </span>
+
+    </footer>
+
+  </div>
+
+  <!-- =======================================================
+       SCRIPTS
+       ======================================================= -->
+
+  <!-- Leaflet: funcionamento do mapa -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    crossorigin=""
+  ></script>
+
+  <!-- Lógica da aplicação -->
+  <script src="script.js"></script>
+
+</body>
+</html>
