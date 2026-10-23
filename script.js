@@ -1,7 +1,7 @@
 
 /* ==========================================================
    GPX RUN STUDIO
-   Percursos, seleção de pontos, histórico, altimetria e GPX
+   Percursos, pesquisa de localidades, pontos, altimetria e GPX
    ========================================================== */
 
 "use strict";
@@ -67,9 +67,7 @@
      ---------------------------------------------------------- */
 
   function setStatus(message) {
-    if (el.status) {
-      el.status.textContent = message;
-    }
+    if (el.status) el.status.textContent = message;
   }
 
   function formatNumber(value, decimals = 2) {
@@ -126,6 +124,581 @@
   }
 
   /* ----------------------------------------------------------
+     PESQUISA DE LOCALIDADES
+     ---------------------------------------------------------- */
+
+  let searchTimer = null;
+  let searchController = null;
+  let searchResults = [];
+  let activeSuggestionIndex = -1;
+  let lastSearchTime = 0;
+
+  let locationSearchInput = null;
+  let locationSuggestions = null;
+  let locationSearchMessage = null;
+
+  function addSearchStyles() {
+    if ($("locationSearchStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "locationSearchStyles";
+
+    style.textContent = `
+      .location-search {
+        position: relative;
+        z-index: 1000;
+        padding: 14px 18px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+      }
+
+      .location-search-label {
+        display: block;
+        margin: 0 0 7px;
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 750;
+      }
+
+      .location-search-input-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .location-search-input {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        height: 44px;
+        padding: 10px 13px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        outline: none;
+        background: var(--surface-2);
+        color: var(--text);
+        font: inherit;
+        font-size: 13px;
+        transition: border-color .18s ease, box-shadow .18s ease;
+      }
+
+      .location-search-input::placeholder {
+        color: var(--muted);
+        opacity: 1;
+      }
+
+      .location-search-input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+      }
+
+      .location-search-clear {
+        flex-shrink: 0;
+        width: 40px;
+        height: 40px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface-2);
+        color: var(--text);
+        font-size: 19px;
+        cursor: pointer;
+      }
+
+      .location-search-clear:hover {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+      }
+
+      .location-search-message {
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 10px;
+        line-height: 1.5;
+      }
+
+      .location-suggestions {
+        position: absolute;
+        top: calc(100% + 5px);
+        left: 0;
+        right: 48px;
+        z-index: 2000;
+        display: none;
+        max-height: 300px;
+        overflow-y: auto;
+        padding: 5px;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        background: var(--surface);
+        box-shadow: 0 12px 30px rgba(0, 0, 0, .28);
+      }
+
+      .location-suggestions.visible {
+        display: block;
+      }
+
+      .location-suggestion {
+        display: block;
+        width: 100%;
+        padding: 10px 11px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--text);
+        text-align: left;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .location-suggestion:hover,
+      .location-suggestion.active {
+        background: var(--accent-soft);
+      }
+
+      .location-suggestion strong {
+        display: block;
+        margin-bottom: 2px;
+        font-size: 12px;
+        font-weight: 750;
+      }
+
+      .location-suggestion span {
+        display: block;
+        color: var(--muted);
+        font-size: 10px;
+        line-height: 1.5;
+      }
+
+      .location-search-attribution {
+        margin-top: 5px;
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .location-search-attribution a {
+        color: var(--muted);
+        text-decoration: underline;
+      }
+
+      @media (max-width: 560px) {
+        .location-search {
+          padding: 12px;
+        }
+
+        .location-suggestions {
+          right: 48px;
+          max-height: 240px;
+        }
+      }
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  function createLocationSearch() {
+    if (!el.map || $("locationSearchPanel")) return;
+
+    addSearchStyles();
+
+    const panel = document.createElement("section");
+    panel.id = "locationSearchPanel";
+    panel.className = "location-search";
+    panel.setAttribute("aria-label", "Pesquisar localidade");
+
+    panel.innerHTML = `
+      <label class="location-search-label" for="locationSearchInput">
+        Pesquisar localidade
+      </label>
+
+      <div class="location-search-input-wrap">
+        <input
+          id="locationSearchInput"
+          class="location-search-input"
+          type="text"
+          placeholder="Escreve uma localidade, por exemplo Coimbra..."
+          autocomplete="off"
+          spellcheck="false"
+          aria-autocomplete="list"
+          aria-controls="locationSearchSuggestions"
+          aria-expanded="false"
+          role="combobox"
+        />
+
+        <button
+          id="locationSearchClear"
+          class="location-search-clear"
+          type="button"
+          aria-label="Limpar pesquisa"
+          title="Limpar pesquisa"
+        >×</button>
+
+        <div
+          id="locationSearchSuggestions"
+          class="location-suggestions"
+          role="listbox"
+        ></div>
+      </div>
+
+      <div
+        id="locationSearchMessage"
+        class="location-search-message"
+        aria-live="polite"
+      >Escreve pelo menos 3 letras para procurar uma localidade.</div>
+
+      <div class="location-search-attribution">
+        Pesquisa fornecida por
+        <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>.
+      </div>
+    `;
+
+    el.map.parentNode.insertBefore(panel, el.map);
+
+    locationSearchInput = $("locationSearchInput");
+    locationSuggestions = $("locationSearchSuggestions");
+    locationSearchMessage = $("locationSearchMessage");
+
+    locationSearchInput.addEventListener("input", onLocationSearchInput);
+    locationSearchInput.addEventListener("keydown", onLocationSearchKeydown);
+
+    $("locationSearchClear").addEventListener("click", () => {
+      clearLocationSearch();
+      locationSearchInput.focus();
+    });
+
+    document.addEventListener("click", (event) => {
+      if (!panel.contains(event.target)) {
+        hideLocationSuggestions();
+      }
+    });
+  }
+
+  function onLocationSearchInput() {
+    const query = locationSearchInput.value.trim();
+
+    clearTimeout(searchTimer);
+    hideLocationSuggestions();
+    activeSuggestionIndex = -1;
+    searchResults = [];
+
+    if (searchController) {
+      searchController.abort();
+      searchController = null;
+    }
+
+    if (query.length < 3) {
+      setLocationSearchMessage(
+        "Escreve pelo menos 3 letras para procurar uma localidade."
+      );
+      return;
+    }
+
+    setLocationSearchMessage("A preparar a pesquisa…");
+
+    // Evita enviar um pedido por cada letra escrita.
+    searchTimer = setTimeout(() => {
+      searchLocations(query);
+    }, 800);
+  }
+
+  async function searchLocations(query) {
+    if (!locationSearchInput || query !== locationSearchInput.value.trim()) {
+      return;
+    }
+
+    if (searchController) searchController.abort();
+
+    searchController = new AbortController();
+
+    // Respeita um intervalo entre pedidos ao serviço de pesquisa.
+    const elapsed = Date.now() - lastSearchTime;
+    const wait = Math.max(0, 1000 - elapsed);
+
+    if (wait > 0) {
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
+
+    if (
+      !locationSearchInput ||
+      query !== locationSearchInput.value.trim()
+    ) {
+      return;
+    }
+
+    const controller = searchController;
+
+    try {
+      setLocationSearchMessage("A procurar localidades…");
+
+      const url =
+        "https://nominatim.openstreetmap.org/search" +
+        "?format=jsonv2" +
+        "&addressdetails=1" +
+        "&countrycodes=pt" +
+        "&limit=7" +
+        "&accept-language=pt" +
+        `&q=${encodeURIComponent(query)}`;
+
+      lastSearchTime = Date.now();
+
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          Accept: "application/json"
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error("O serviço de pesquisa não respondeu.");
+      }
+
+      const results = await response.json();
+
+      if (
+        controller !== searchController ||
+        query !== locationSearchInput.value.trim()
+      ) {
+        return;
+      }
+
+      searchResults = Array.isArray(results)
+        ? results.filter((item) =>
+            Number.isFinite(Number(item.lat)) &&
+            Number.isFinite(Number(item.lon))
+          )
+        : [];
+
+      if (searchResults.length === 0) {
+        hideLocationSuggestions();
+        setLocationSearchMessage(
+          "Não foram encontradas localidades. Experimenta escrever outro nome."
+        );
+        return;
+      }
+
+      renderLocationSuggestions(searchResults);
+
+      setLocationSearchMessage(
+        `${searchResults.length} sugestões encontradas. Seleciona uma para centrar o mapa.`
+      );
+    } catch (error) {
+      if (error.name === "AbortError") return;
+
+      console.error("Erro na pesquisa de localidades:", error);
+
+      hideLocationSuggestions();
+
+      setLocationSearchMessage(
+        "Não foi possível pesquisar. Verifica a ligação à Internet e tenta novamente."
+      );
+    }
+  }
+
+  function getLocationTitle(item) {
+    const address = item.address || {};
+
+    return (
+      address.city ||
+      address.town ||
+      address.village ||
+      address.municipality ||
+      address.county ||
+      item.name ||
+      item.display_name?.split(",")[0] ||
+      "Localidade"
+    );
+  }
+
+  function getLocationSubtitle(item) {
+    const address = item.address || {};
+
+    const parts = [
+      address.suburb,
+      address.city_district,
+      address.municipality,
+      address.county,
+      address.state
+    ].filter(Boolean);
+
+    const uniqueParts = [...new Set(parts)];
+    const title = getLocationTitle(item);
+
+    const filtered = uniqueParts.filter((part) => part !== title);
+
+    if (filtered.length > 0) {
+      return filtered.slice(0, 3).join(", ");
+    }
+
+    return item.display_name || "Portugal";
+  }
+
+  function renderLocationSuggestions(results) {
+    if (!locationSuggestions) return;
+
+    locationSuggestions.replaceChildren();
+
+    results.forEach((item, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "location-suggestion";
+      button.setAttribute("role", "option");
+      button.setAttribute("aria-selected", "false");
+
+      const title = document.createElement("strong");
+      title.textContent = getLocationTitle(item);
+
+      const subtitle = document.createElement("span");
+      subtitle.textContent = getLocationSubtitle(item);
+
+      button.append(title, subtitle);
+
+      button.addEventListener("click", () => {
+        selectLocation(item);
+      });
+
+      button.addEventListener("mouseenter", () => {
+        setActiveSuggestion(index);
+      });
+
+      locationSuggestions.appendChild(button);
+    });
+
+    locationSuggestions.classList.add("visible");
+    locationSearchInput.setAttribute("aria-expanded", "true");
+  }
+
+  function setActiveSuggestion(index) {
+    if (!locationSuggestions) return;
+
+    const buttons = Array.from(
+      locationSuggestions.querySelectorAll(".location-suggestion")
+    );
+
+    if (buttons.length === 0) return;
+
+    activeSuggestionIndex = Math.max(
+      0,
+      Math.min(index, buttons.length - 1)
+    );
+
+    buttons.forEach((button, buttonIndex) => {
+      const active = buttonIndex === activeSuggestionIndex;
+
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", String(active));
+    });
+
+    buttons[activeSuggestionIndex].scrollIntoView({
+      block: "nearest"
+    });
+  }
+
+  function onLocationSearchKeydown(event) {
+    if (!locationSuggestions?.classList.contains("visible")) {
+      if (event.key === "Escape") hideLocationSuggestions();
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveSuggestion(activeSuggestionIndex + 1);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveSuggestion(
+        activeSuggestionIndex <= 0
+          ? searchResults.length - 1
+          : activeSuggestionIndex - 1
+      );
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+
+      if (
+        activeSuggestionIndex >= 0 &&
+        searchResults[activeSuggestionIndex]
+      ) {
+        selectLocation(searchResults[activeSuggestionIndex]);
+      } else if (searchResults.length === 1) {
+        selectLocation(searchResults[0]);
+      }
+    } else if (event.key === "Escape") {
+      hideLocationSuggestions();
+    }
+  }
+
+  function selectLocation(item) {
+    if (!map) return;
+
+    const lat = Number(item.lat);
+    const lng = Number(item.lon);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      setLocationSearchMessage("Não foi possível localizar este resultado.");
+      return;
+    }
+
+    const title = getLocationTitle(item);
+    const subtitle = getLocationSubtitle(item);
+
+    // Mover o mapa não altera nem apaga os pontos do percurso.
+    map.setView([lat, lng], 14, {
+      animate: true
+    });
+
+    locationSearchInput.value = title;
+    hideLocationSuggestions();
+
+    setLocationSearchMessage(
+      `Mapa centrado em ${title}${subtitle ? ` — ${subtitle}` : ""}.`
+    );
+
+    setStatus(
+      `Mapa centrado em ${title}. Os pontos do percurso foram preservados.`
+    );
+
+    if (el.mapHint) {
+      el.mapHint.textContent =
+        `Localização: ${title}. Clica no mapa para adicionar pontos ao percurso.`;
+    }
+
+    // Atualiza o tamanho do mapa sem mexer nos pontos existentes.
+    setTimeout(() => {
+      if (map) map.invalidateSize();
+    }, 150);
+  }
+
+  function setLocationSearchMessage(message) {
+    if (locationSearchMessage) {
+      locationSearchMessage.textContent = message;
+    }
+  }
+
+  function hideLocationSuggestions() {
+    if (!locationSuggestions) return;
+
+    locationSuggestions.classList.remove("visible");
+    locationSearchInput?.setAttribute("aria-expanded", "false");
+  }
+
+  function clearLocationSearch() {
+    clearTimeout(searchTimer);
+
+    if (searchController) {
+      searchController.abort();
+      searchController = null;
+    }
+
+    if (locationSearchInput) locationSearchInput.value = "";
+
+    searchResults = [];
+    activeSuggestionIndex = -1;
+
+    hideLocationSuggestions();
+
+    setLocationSearchMessage(
+      "Escreve pelo menos 3 letras para procurar uma localidade."
+    );
+  }
+
+  /* ----------------------------------------------------------
      HISTÓRICO — VOLTAR ATRÁS
      ---------------------------------------------------------- */
 
@@ -157,9 +730,7 @@
     points = clonePoints(previous.points);
     altitudes = [...previous.altitudes];
 
-    if (el.routeType) {
-      el.routeType.value = previous.routeType;
-    }
+    if (el.routeType) el.routeType.value = previous.routeType;
 
     lastRouteType = previous.routeType;
 
@@ -176,9 +747,7 @@
     renderElevationChart();
     updateEditButtons();
 
-    if (points.length > 0) {
-      fitRoute();
-    }
+    if (points.length > 0) fitRoute();
 
     if (el.elevationStatus) {
       el.elevationStatus.textContent =
@@ -251,14 +820,10 @@
   function setMapType(type) {
     if (!map) return;
 
-    if (!tileLayers[type]) {
-      type = "satellite";
-    }
+    if (!tileLayers[type]) type = "satellite";
 
     Object.values(tileLayers).forEach((layer) => {
-      if (map.hasLayer(layer)) {
-        map.removeLayer(layer);
-      }
+      if (map.hasLayer(layer)) map.removeLayer(layer);
     });
 
     tileLayers[type].addTo(map);
@@ -305,10 +870,7 @@
   function updateMarkers() {
     if (!map) return;
 
-    markers.forEach((marker) => {
-      map.removeLayer(marker);
-    });
-
+    markers.forEach((marker) => map.removeLayer(marker));
     markers = [];
 
     points.forEach((point, index) => {
@@ -321,13 +883,8 @@
 
       marker.addTo(map);
 
-      marker.on("click", () => {
-        selectPoint(index);
-      });
-
-      marker.on("contextmenu", () => {
-        removePoint(index);
-      });
+      marker.on("click", () => selectPoint(index));
+      marker.on("contextmenu", () => removePoint(index));
 
       marker.on("dragstart", () => {
         saveUndoState();
@@ -451,9 +1008,7 @@
   }
 
   function newRoute() {
-    if (points.length > 0 || altitudes.length > 0) {
-      saveUndoState();
-    }
+    if (points.length > 0 || altitudes.length > 0) saveUndoState();
 
     requestNumber++;
     points = [];
@@ -466,9 +1021,7 @@
     renderElevationChart();
     updateEditButtons();
 
-    if (map) {
-      map.setView([39.5, -8.0], 7);
-    }
+    if (map) map.setView([39.5, -8.0], 7);
 
     if (el.elevationStatus) {
       el.elevationStatus.textContent = "À espera de um percurso.";
@@ -529,13 +1082,10 @@
 
   function updateStats() {
     if (el.distance) {
-      el.distance.textContent =
-        `${formatNumber(calculateDistanceKm())} km`;
+      el.distance.textContent = `${formatNumber(calculateDistanceKm())} km`;
     }
 
-    if (el.pointCount) {
-      el.pointCount.textContent = String(points.length);
-    }
+    if (el.pointCount) el.pointCount.textContent = String(points.length);
 
     if (altitudes.length !== points.length || altitudes.length === 0) {
       if (el.altitudeRange) el.altitudeRange.textContent = "— / — m";
@@ -568,26 +1118,16 @@
       if (
         !Number.isFinite(altitudes[i - 1]) ||
         !Number.isFinite(altitudes[i])
-      ) {
-        continue;
-      }
+      ) continue;
 
       const difference = altitudes[i] - altitudes[i - 1];
 
-      if (difference > 0) {
-        totalAscent += difference;
-      } else {
-        totalDescent += Math.abs(difference);
-      }
+      if (difference > 0) totalAscent += difference;
+      else totalDescent += Math.abs(difference);
     }
 
-    if (el.ascent) {
-      el.ascent.textContent = `${formatNumber(totalAscent, 0)} m`;
-    }
-
-    if (el.descent) {
-      el.descent.textContent = `${formatNumber(totalDescent, 0)} m`;
-    }
+    if (el.ascent) el.ascent.textContent = `${formatNumber(totalAscent, 0)} m`;
+    if (el.descent) el.descent.textContent = `${formatNumber(totalDescent, 0)} m`;
   }
 
   function updateEditButtons() {
@@ -598,21 +1138,10 @@
         selectedPointIndex >= points.length;
     }
 
-    if (el.undoBtn) {
-      el.undoBtn.disabled = undoHistory.length === 0;
-    }
-
-    if (el.clearRouteBtn) {
-      el.clearRouteBtn.disabled = points.length === 0;
-    }
-
-    if (el.exportBtn) {
-      el.exportBtn.disabled = points.length < 2;
-    }
-
-    if (el.loadElevationBtn) {
-      el.loadElevationBtn.disabled = points.length < 2;
-    }
+    if (el.undoBtn) el.undoBtn.disabled = undoHistory.length === 0;
+    if (el.clearRouteBtn) el.clearRouteBtn.disabled = points.length === 0;
+    if (el.exportBtn) el.exportBtn.disabled = points.length < 2;
+    if (el.loadElevationBtn) el.loadElevationBtn.disabled = points.length < 2;
   }
 
   /* ----------------------------------------------------------
@@ -643,10 +1172,8 @@
         const angle = 2 * Math.PI * i / count;
 
         generated.push({
-          lat: center.lat +
-            radius * Math.sin(angle) / latitudeScale,
-          lng: center.lng +
-            radius * Math.cos(angle) / longitudeScale
+          lat: center.lat + radius * Math.sin(angle) / latitudeScale,
+          lng: center.lng + radius * Math.cos(angle) / longitudeScale
         });
       }
 
@@ -926,65 +1453,30 @@
           </linearGradient>
         </defs>
 
-        <line
-          x1="${padding.left}"
-          y1="${padding.top}"
-          x2="${padding.left}"
-          y2="${bottomY}"
-          stroke="currentColor"
-          stroke-opacity="0.18"
-        />
+        <line x1="${padding.left}" y1="${padding.top}"
+          x2="${padding.left}" y2="${bottomY}"
+          stroke="currentColor" stroke-opacity="0.18"/>
 
-        <line
-          x1="${padding.left}"
-          y1="${bottomY}"
-          x2="${width - padding.right}"
-          y2="${bottomY}"
-          stroke="currentColor"
-          stroke-opacity="0.18"
-        />
+        <line x1="${padding.left}" y1="${bottomY}"
+          x2="${width - padding.right}" y2="${bottomY}"
+          stroke="currentColor" stroke-opacity="0.18"/>
 
         <path d="${areaPath}" fill="url(#elevationGradient)"/>
 
-        <path
-          d="${linePath}"
-          fill="none"
-          stroke="${color}"
-          stroke-width="2.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
+        <path d="${linePath}" fill="none" stroke="${color}"
+          stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
 
-        <text
-          x="${padding.left - 7}"
-          y="${padding.top + 4}"
-          text-anchor="end"
-          font-size="10"
-          fill="currentColor"
-        >${Math.round(maxAltitude)} m</text>
+        <text x="${padding.left - 7}" y="${padding.top + 4}"
+          text-anchor="end" font-size="10" fill="currentColor">${Math.round(maxAltitude)} m</text>
 
-        <text
-          x="${padding.left - 7}"
-          y="${bottomY}"
-          text-anchor="end"
-          font-size="10"
-          fill="currentColor"
-        >${Math.round(minAltitude)} m</text>
+        <text x="${padding.left - 7}" y="${bottomY}"
+          text-anchor="end" font-size="10" fill="currentColor">${Math.round(minAltitude)} m</text>
 
-        <text
-          x="${padding.left}"
-          y="${height - 7}"
-          font-size="10"
-          fill="currentColor"
-        >0 km</text>
+        <text x="${padding.left}" y="${height - 7}"
+          font-size="10" fill="currentColor">0 km</text>
 
-        <text
-          x="${width - padding.right}"
-          y="${height - 7}"
-          text-anchor="end"
-          font-size="10"
-          fill="currentColor"
-        >${formatNumber(profileDistance)} km</text>
+        <text x="${width - padding.right}" y="${height - 7}"
+          text-anchor="end" font-size="10" fill="currentColor">${formatNumber(profileDistance)} km</text>
       </svg>
     `;
   }
@@ -1199,24 +1691,12 @@
 
   function bindEvents() {
     el.createRouteBtn?.addEventListener("click", createRoute);
-
-    el.deletePointBtn?.addEventListener(
-      "click",
-      deleteSelectedPoint
-    );
-
+    el.deletePointBtn?.addEventListener("click", deleteSelectedPoint);
     el.undoBtn?.addEventListener("click", undoLastChange);
-
     el.clearRouteBtn?.addEventListener("click", clearRoute);
-
     el.newRouteBtn?.addEventListener("click", newRoute);
-
     el.exportBtn?.addEventListener("click", exportGPX);
-
-    el.loadElevationBtn?.addEventListener(
-      "click",
-      loadElevation
-    );
+    el.loadElevationBtn?.addEventListener("click", loadElevation);
 
     el.mapType?.addEventListener("change", () => {
       setMapType(el.mapType.value);
@@ -1238,10 +1718,7 @@
     });
 
     window.addEventListener("resize", () => {
-      if (map) {
-        map.invalidateSize();
-      }
-
+      if (map) map.invalidateSize();
       renderElevationChart();
     });
   }
@@ -1255,6 +1732,7 @@
 
     lastRouteType = el.routeType?.value || "linear";
 
+    createLocationSearch();
     bindEvents();
     addImportButton();
     updateRouteLine();
@@ -1266,7 +1744,7 @@
 
     if (el.mapHint) {
       el.mapHint.textContent =
-        "Clica no mapa para adicionar pontos. Clica num marcador para o selecionar.";
+        "Pesquisa uma localidade ou clica no mapa para adicionar pontos.";
     }
 
     setStatus("Pronto para criar um percurso.");
@@ -1278,3 +1756,4 @@
     init();
   }
 })();
+
