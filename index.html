@@ -5,84 +5,141 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#101419">
+
   <title>GPX Run Studio</title>
 
+  <!-- Leaflet: estilos do mapa -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     crossorigin=""
   >
+
+  <!-- Estilos da aplicação -->
   <link rel="stylesheet" href="style.css">
 </head>
 
 <body data-theme="dark">
+
   <div class="app">
 
+    <!-- =====================================================
+         CABEÇALHO
+         ===================================================== -->
+
     <header class="app-header">
+
       <div class="brand">
         <h1>GPX Run Studio</h1>
         <p>Desenha. Explora. Corre.</p>
       </div>
 
       <div class="header-actions">
-        <span class="header-badge">ROUTE PLANNER</span>
-        <button id="newRouteBtn" type="button" class="secondary-button">
+
+        <span class="header-badge">
+          ROUTE PLANNER
+        </span>
+
+        <button
+          id="newRouteBtn"
+          type="button"
+          class="secondary-button"
+        >
           + Novo percurso
         </button>
-        <button id="exportBtn" type="button" class="primary-button">
+
+        <button
+          id="exportBtn"
+          type="button"
+          class="primary-button"
+        >
           ↓ Exportar GPX
         </button>
+
       </div>
+
     </header>
+
+    <!-- =====================================================
+         ÁREA PRINCIPAL
+         ===================================================== -->
 
     <main class="app-layout">
 
+      <!-- ===================================================
+           COLUNA DO MAPA E ALTIMETRIA
+           =================================================== -->
+
       <div class="map-column">
 
+        <!-- Mapa -->
+
         <section class="map-panel">
+
           <div class="map-toolbar">
+
             <div class="map-toolbar-info">
+
               <strong>Mapa do percurso</strong>
+
               <span id="mapHint">
                 Clica no mapa para adicionar pontos.
               </span>
+
             </div>
 
-            <div class="map-toolbar-actions">
-              <label for="mapType">Estilo do mapa</label>
-              <select id="mapType">
-                <option value="satellite" selected>Satélite</option>
-                <option value="street">Mapa de rua</option>
-                <option value="terrain">Terreno</option>
-              </select>
-            </div>
           </div>
 
-          <div id="map" aria-label="Mapa interativo do percurso"></div>
+          <div
+            id="map"
+            aria-label="Mapa interativo do percurso"
+          ></div>
+
         </section>
 
+        <!-- Altimetria -->
+
         <section class="panel elevation-panel">
+
           <div class="panel-heading">
+
             <div>
               <h2>Altimetria</h2>
+
               <p class="panel-subtitle">
                 Perfil de elevação do percurso
               </p>
             </div>
+
             <span class="elevation-icon">↗</span>
+
           </div>
 
           <div class="chart-summary">
+
             <span>Distância do perfil</span>
-            <strong id="chartDistance">0,00 km</strong>
+
+            <strong id="chartDistance">
+              0,00 km
+            </strong>
+
           </div>
 
-          <div id="elevationChart" class="elevation-chart">
-            <p>Cria um percurso e carrega a altimetria.</p>
+          <div
+            id="elevationChart"
+            class="elevation-chart"
+          >
+            <p>
+              Cria um percurso e carrega a altimetria.
+            </p>
           </div>
 
           <div class="elevation-footer">
-            <span id="elevationStatus">À espera de um percurso.</span>
+
+            <span id="elevationStatus">
+              À espera de um percurso.
+            </span>
+
             <button
               id="loadElevationBtn"
               type="button"
@@ -90,20 +147,39 @@
             >
               Carregar altimetria
             </button>
+
           </div>
+
         </section>
 
       </div>
 
+      <!-- ===================================================
+           BARRA LATERAL
+           =================================================== -->
+
       <aside class="sidebar">
 
+        <!-- Configuração do percurso -->
+
         <section class="panel">
+
           <h2>Configuração do percurso</h2>
 
-          <label for="routeType">Tipo de percurso</label>
+          <label for="routeType">
+            Tipo de percurso
+          </label>
+
           <select id="routeType">
-            <option value="linear">Linear — percurso de ida</option>
-            <option value="circular">Circular — circuito</option>
+
+            <option value="linear">
+              Linear — percurso de ida
+            </option>
+
+            <option value="circular">
+              Circular — circuito
+            </option>
+
           </select>
 
           <button
@@ -115,6 +191,7 @@
           </button>
 
           <div class="edit-actions">
+
             <button
               id="deletePointBtn"
               type="button"
@@ -132,6 +209,7 @@
             >
               ↶ Voltar atrás
             </button>
+
           </div>
 
           <button
@@ -144,78 +222,189 @@
           </button>
 
           <p class="help-text">
-            Clica no mapa para adicionar pontos. Clica num marcador para o
-            selecionar: ficará vermelho. Usa «Eliminar ponto» para o apagar.
-            Arrasta os marcadores para os mover ou clica com o botão direito
-            para eliminar. «Voltar atrás» recupera a última alteração.
+            Clica no mapa para adicionar pontos. Clica num
+            marcador para o selecionar: ficará vermelho.
+            Usa «Eliminar ponto» para o apagar. Arrasta os
+            marcadores para os mover ou clica com o botão
+            direito para eliminar. «Voltar atrás» recupera
+            a última alteração.
           </p>
+
         </section>
 
+        <!-- Resumo do percurso -->
+
         <section class="panel">
+
           <h2>Resumo do percurso</h2>
 
           <div class="stats-grid">
+
             <div class="stat-card stat-primary">
+
               <span>Distância</span>
-              <strong id="distance">0,00 km</strong>
+
+              <strong id="distance">
+                0,00 km
+              </strong>
+
             </div>
 
             <div class="stat-card">
+
               <span>Altitude min. / máx.</span>
-              <strong id="altitudeRange">— / — m</strong>
+
+              <strong id="altitudeRange">
+                — / — m
+              </strong>
+
             </div>
 
             <div class="stat-card">
+
               <span>Descida acumulada</span>
-              <strong id="descent">— m</strong>
+
+              <strong id="descent">
+                — m
+              </strong>
+
             </div>
 
             <div class="stat-card">
+
               <span>Subida acumulada</span>
-              <strong id="ascent">— m</strong>
+
+              <strong id="ascent">
+                — m
+              </strong>
+
             </div>
 
             <div class="stat-card stat-wide">
+
               <span>Pontos do percurso</span>
-              <strong id="pointCount">0</strong>
+
+              <strong id="pointCount">
+                0
+              </strong>
+
             </div>
+
           </div>
+
         </section>
+
+        <!-- Aparência -->
 
         <section class="panel">
+
           <h2>Aparência</h2>
 
-          <label for="themeSelect">Tema visual</label>
+          <label for="themeSelect">
+            Tema visual
+          </label>
+
           <select id="themeSelect">
-            <option value="dark">Dark — desportivo</option>
-            <option value="light">Light — claro</option>
-            <option value="garmin">Garmin — verde</option>
-            <option value="strava">Strava — laranja</option>
-            <option value="midnight">Midnight — violeta</option>
-            <option value="forest">Forest — natureza</option>
-            <option value="ocean">Ocean — azul</option>
-            <option value="sunset">Sunset — rosa</option>
+
+            <option value="dark">
+              Dark — desportivo
+            </option>
+
+            <option value="light">
+              Light — claro
+            </option>
+
+            <option value="garmin">
+              Garmin — verde
+            </option>
+
+            <option value="strava">
+              Strava — laranja
+            </option>
+
+            <option value="midnight">
+              Midnight — violeta
+            </option>
+
+            <option value="forest">
+              Forest — natureza
+            </option>
+
+            <option value="ocean">
+              Ocean — azul
+            </option>
+
+            <option value="sunset">
+              Sunset — rosa
+            </option>
+
           </select>
+
+          <label for="mapType">
+            Estilo do mapa
+          </label>
+
+          <select id="mapType">
+
+            <option value="satellite" selected>
+              Satélite
+            </option>
+
+            <option value="street">
+              Mapa de rua
+            </option>
+
+            <option value="terrain">
+              Terreno
+            </option>
+
+          </select>
+
         </section>
 
-        <p id="status" class="status-message" role="status">
+        <!-- Mensagens da aplicação -->
+
+        <p
+          id="status"
+          class="status-message"
+          role="status"
+          aria-live="polite"
+        >
           Pronto para criar um percurso.
         </p>
 
       </aside>
+
     </main>
 
+    <!-- =====================================================
+         RODAPÉ
+         ===================================================== -->
+
     <footer class="app-footer">
+
       <span>GPX Run Studio</span>
-      <span>Planeia o teu próximo desafio.</span>
+
+      <span>
+        Planeia o teu próximo desafio.
+      </span>
+
     </footer>
 
   </div>
 
+  <!-- =======================================================
+       SCRIPTS
+       ======================================================= -->
+
+  <!-- Leaflet: funcionamento do mapa -->
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     crossorigin=""
   ></script>
+
+  <!-- Lógica da aplicação -->
   <script src="script.js"></script>
+
 </body>
 </html>
