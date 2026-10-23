@@ -88,7 +88,8 @@ body {
 }
 
 button,
-select {
+select,
+input {
   font: inherit;
 }
 
@@ -218,17 +219,29 @@ button:disabled {
   gap: 18px;
 }
 
+/*
+   IMPORTANTE:
+   O painel do mapa permite que as sugestões da pesquisa
+   apareçam fora dos seus limites sem serem cortadas.
+*/
+
 .map-panel,
 .panel {
   min-width: 0;
-  overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 13px;
   box-shadow: var(--shadow);
 }
 
+.map-panel {
+  position: relative;
+  z-index: 5;
+  overflow: visible;
+}
+
 .panel {
+  overflow: hidden;
   padding: 20px;
 }
 
@@ -239,6 +252,8 @@ button:disabled {
   letter-spacing: -0.25px;
 }
 
+/* Barra superior do mapa */
+
 .map-toolbar {
   display: flex;
   min-height: 72px;
@@ -247,6 +262,7 @@ button:disabled {
   gap: 16px;
   padding: 14px 18px;
   border-bottom: 1px solid var(--border);
+  border-radius: 12px 12px 0 0;
 }
 
 .map-toolbar-info {
@@ -276,14 +292,118 @@ button:disabled {
   white-space: nowrap;
 }
 
+/* Pesquisa de localidades */
+
+.location-search {
+  position: relative;
+  z-index: 1000;
+  width: 100%;
+  padding: 14px 18px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.location-search input,
+.location-search input[type="text"] {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 43px;
+  padding: 10px 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.location-search input::placeholder {
+  color: var(--muted);
+  opacity: 0.85;
+}
+
+.location-search input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/*
+   A lista de localidades fica acima do mapa e não é cortada
+   pelo painel que a contém.
+*/
+
+.location-suggestions {
+  position: absolute;
+  top: calc(100% - 1px);
+  right: 18px;
+  left: 18px;
+  z-index: 9999;
+  display: none;
+  max-height: 300px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  margin: 0;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 0 0 10px 10px;
+  background: var(--surface);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
+  list-style: none;
+}
+
+/* Quando o JavaScript mostra a lista */
+
+.location-suggestions:not(:empty) {
+  /* A visibilidade é controlada pelo JavaScript. */
+}
+
+.location-suggestions li {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.location-suggestions button,
+.location-suggestions .suggestion-item,
+.location-suggestions [role="option"] {
+  display: block;
+  width: 100%;
+  padding: 11px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+}
+
+.location-suggestions button:hover,
+.location-suggestions .suggestion-item:hover,
+.location-suggestions [role="option"]:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.location-suggestions button:focus-visible,
+.location-suggestions [role="option"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 /* Mapa */
 
 #map {
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: clamp(380px, 53vw, 650px);
   min-height: 350px;
+  overflow: hidden;
+  border-radius: 0 0 12px 12px;
   background: #18212b;
-  z-index: 1;
 }
 
 .leaflet-container {
@@ -631,6 +751,10 @@ select:focus {
   .map-toolbar-actions label {
     display: none;
   }
+
+  .location-suggestions {
+    max-height: 260px;
+  }
 }
 
 @media (max-width: 560px) {
@@ -673,6 +797,16 @@ select:focus {
 
   .map-toolbar-actions select {
     width: 100%;
+  }
+
+  .location-search {
+    padding: 12px;
+  }
+
+  .location-suggestions {
+    right: 12px;
+    left: 12px;
+    max-height: 230px;
   }
 
   #map {
