@@ -1,7 +1,7 @@
 
 /* ==========================================================
    GPX RUN STUDIO
-   Mapa, percursos, estatísticas, altimetria e exportação GPX
+   Percursos, seleção de pontos, histórico, altimetria e GPX
    ========================================================== */
 
 "use strict";
@@ -12,344 +12,499 @@
   const el = {
     map: $("map"),
     mapHint: $("mapHint"),
+    mapType: $("mapType"),
     routeType: $("routeType"),
-    routeDistance: $("routeDistance"),
     createRouteBtn: $("createRouteBtn"),
+    deletePointBtn: $("deletePointBtn"),
+    undoBtn: $("undoBtn"),
     clearRouteBtn: $("clearRouteBtn"),
     newRouteBtn: $("newRouteBtn"),
     exportBtn: $("exportBtn"),
+    loadElevationBtn: $("loadElevationBtn"),
+    elevationChart: $("elevationChart"),
+    chartDistance: $("chartDistance"),
+    elevationStatus: $("elevationStatus"),
     distance: $("distance"),
     altitudeRange: $("altitudeRange"),
-    descent: $("descent"),
     ascent: $("ascent"),
+    descent: $("descent"),
     pointCount: $("pointCount"),
-    loadElevationBtn: $("loadElevationBtn"),
-    elevationStatus: $("elevationStatus"),
-    chartDistance: $("chartDistance"),
-    elevationChart: $("elevationChart"),
-    themeSelect: $("themeSelect"),
-    mapType: $("mapType"),
-    status: $("status")
+    status: $("status"),
+    themeSelect: $("themeSelect")
   };
 
-  const ALTITUDE_API = "https://api.open-meteo.com/v1/elevation";
+  const DEFAULT_DISTANCE_KM = 5;
+  const MAX_UNDO_STEPS = 40;
 
-  const themes = [
-    "dark", "light", "garmin", "strava",
-    "midnight", "forest", "ocean", "sunset"
-  ];
-
-  let map;
-  let routeLine;
+  let map = null;
+  let routeLine = null;
   let markers = [];
   let points = [];
   let altitudes = [];
-  let tileLayer;
-  let chartCanvas = null;
-  let elevationLoading = false;
+  let selectedPointIndex = null;
+
+  let undoHistory = [];
+  let lastRouteType = el.routeType?.value || "linear";
   let requestNumber = 0;
+  let currentTheme = el.themeSelect?.value || "dark";
+  let currentMapType = el.mapType?.value || "satellite";
 
-  const tileSources = {
-    street: {
-      url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-      options: {
-        maxZoom: 19,
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-      }
-    },
+  const tileLayers = {};
 
-    satellite: {
-      url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      options: {
-        maxZoom: 19,
-        attribution: "Tiles &copy; Esri"
-      }
-    },
-
-    terrain: {
-      url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
-      options: {
-        maxZoom: 17,
-        attribution:
-          'Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap'
-      }
-    }
+  const themeColors = {
+    dark: "#ff7a18",
+    light: "#e86b12",
+    garmin: "#8bc34a",
+    strava: "#fc4c02",
+    midnight: "#a78bfa",
+    forest: "#34d399",
+    ocean: "#38bdf8",
+    sunset: "#fb7185"
   };
 
-  /* -------------------- UTILITÁRIOS -------------------- */
+  /* ----------------------------------------------------------
+     UTILITÁRIOS
+     ---------------------------------------------------------- */
 
   function setStatus(message) {
-    if (el.status) el.status.textContent = message;
-  }
-
-  function setHint(message) {
-    if (el.mapHint) el.mapHint.textContent = message;
-  }
-
-  function setElevationStatus(message) {
-    if (el.elevationStatus) {
-      el.elevationStatus.textContent = message;
+    if (el.status) {
+      el.status.textContent = message;
     }
   }
 
   function formatNumber(value, decimals = 2) {
-    if (!Number.isFinite(value)) return "—";
-
-    return value.toLocaleString("pt-PT", {
+    return Number(value).toLocaleString("pt-PT", {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals
     });
   }
 
-  function validAltitudeValues() {
-    return (
-      points.length >= 2 &&
-      altitudes.length === points.length &&
-      altitudes.every(Number.isFinite)
-    );
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, (char) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    })[char]);
   }
 
-  function distanceBetween(a, b) {
-    const radius = 6371000;
-    const radians = (degrees) => degrees * Math.PI / 180;
+  function clonePoints(source = points) {
+    return source.map((point) => ({
+      lat: Number(point.lat),
+      lng: Number(point.lng)
+    }));
+  }
 
-    const lat1 = radians(a.lat);
-    const lat2 = radians(b.lat);
-    const deltaLat = radians(b.lat - a.lat);
-    const deltaLng = radians(b.lng - a.lng);
+  function haversine(a, b) {
+    const earthRadius = 6371000;
+    const toRad = (value) => value * Math.PI / 180;
 
-    const h =
+    const lat1 = toRad(a.lat);
+    const lat2 = toRad(b.lat);
+    const deltaLat = toRad(b.lat - a.lat);
+    const deltaLng = toRad(b.lng - a.lng);
+
+    const value =
       Math.sin(deltaLat / 2) ** 2 +
-      Math.cos(lat1) * Math.cos(lat2) *
+      Math.cos(lat1) *
+      Math.cos(lat2) *
       Math.sin(deltaLng / 2) ** 2;
 
-    return 2 * radius * Math.asin(
-      Math.min(1, Math.sqrt(h))
-    );
+    return earthRadius * 2 *
+      Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
   }
 
-  function routeDistanceMeters() {
-    if (points.length < 2) return 0;
+  function calculateDistanceKm(source = points) {
+    let metres = 0;
 
-    let total = 0;
-
-    for (let i = 1; i < points.length; i++) {
-      total += distanceBetween(points[i - 1], points[i]);
+    for (let i = 1; i < source.length; i++) {
+      metres += haversine(source[i - 1], source[i]);
     }
 
-    if (el.routeType.value === "circular" && points.length > 2) {
-      const first = points[0];
-      const last = points[points.length - 1];
-
-      if (distanceBetween(first, last) > 2) {
-        total += distanceBetween(last, first);
-      }
-    }
-
-    return total;
+    return metres / 1000;
   }
 
-  function cumulativeDistancesKm() {
-    const result = [0];
-    let total = 0;
+  /* ----------------------------------------------------------
+     HISTÓRICO — VOLTAR ATRÁS
+     ---------------------------------------------------------- */
 
-    for (let i = 1; i < points.length; i++) {
-      total += distanceBetween(points[i - 1], points[i]);
-      result.push(total / 1000);
+  function saveUndoState(routeTypeOverride = null) {
+    undoHistory.push({
+      points: clonePoints(),
+      altitudes: [...altitudes],
+      routeType: routeTypeOverride || el.routeType?.value || "linear",
+      selectedPointIndex
+    });
+
+    if (undoHistory.length > MAX_UNDO_STEPS) {
+      undoHistory.shift();
     }
 
-    return result;
+    updateEditButtons();
   }
 
-  function clearAltitudeData() {
-    // Invalida pedidos de altitude que ainda estejam em curso.
-    requestNumber++;
-    elevationLoading = false;
-
-    if (el.loadElevationBtn) {
-      el.loadElevationBtn.disabled = false;
-    }
-
-    altitudes = [];
-
-    setElevationStatus("Carrega a altimetria para obter as altitudes.");
-    renderChartPlaceholder("Cria um percurso e carrega a altimetria.");
-    updateStats();
-  }
-
-  /* -------------------- MAPA -------------------- */
-
-  function initMap() {
-    if (!window.L) {
-      setStatus(
-        "Não foi possível carregar o mapa. Verifica a ligação à Internet."
-      );
-      setHint("A biblioteca do mapa não foi carregada.");
+  function undoLastChange() {
+    if (undoHistory.length === 0) {
+      setStatus("Não existem alterações para recuperar.");
       return;
     }
 
-    map = L.map("map", {
+    const previous = undoHistory.pop();
+
+    requestNumber++;
+
+    points = clonePoints(previous.points);
+    altitudes = [...previous.altitudes];
+
+    if (el.routeType) {
+      el.routeType.value = previous.routeType;
+    }
+
+    lastRouteType = previous.routeType;
+
+    selectedPointIndex =
+      previous.selectedPointIndex !== null &&
+      previous.selectedPointIndex >= 0 &&
+      previous.selectedPointIndex < points.length
+        ? previous.selectedPointIndex
+        : null;
+
+    updateRouteLine();
+    updateMarkers();
+    updateStats();
+    renderElevationChart();
+    updateEditButtons();
+
+    if (points.length > 0) {
+      fitRoute();
+    }
+
+    if (el.elevationStatus) {
+      el.elevationStatus.textContent =
+        altitudes.length === points.length && altitudes.length > 0
+          ? "Altimetria disponível."
+          : points.length >= 2
+            ? "Altimetria por carregar."
+            : "À espera de um percurso.";
+    }
+
+    if (el.mapHint) {
+      el.mapHint.textContent =
+        "Alteração revertida. Clica no mapa para adicionar pontos.";
+    }
+
+    setStatus("Última alteração revertida.");
+  }
+
+  /* ----------------------------------------------------------
+     MAPA
+     ---------------------------------------------------------- */
+
+  function initMap() {
+    if (!el.map || typeof L === "undefined") {
+      setStatus("Não foi possível carregar o mapa. Verifica a ligação à Internet.");
+      return false;
+    }
+
+    map = L.map(el.map, {
       zoomControl: true,
-      preferCanvas: true
-    }).setView([39.6, -8.0], 7);
+      doubleClickZoom: false
+    }).setView([39.5, -8.0], 7);
 
-    // VISTA PREDEFINIDA: SATÉLITE
-    setTileLayer("satellite");
+    tileLayers.street = L.tileLayer(
+      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 19
+      }
+    );
 
-    // Mantém o seletor sincronizado com a camada inicial.
-    el.mapType.value = "satellite";
+    tileLayers.satellite = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      {
+        attribution: "Tiles &copy; Esri",
+        maxZoom: 19
+      }
+    );
 
-    routeLine = L.polyline([], {
-      color: "#fc642d",
-      weight: 5,
-      opacity: 0.95,
-      lineCap: "round",
-      lineJoin: "round"
-    }).addTo(map);
+    tileLayers.terrain = L.tileLayer(
+      "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+      {
+        attribution: "Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap",
+        maxZoom: 17
+      }
+    );
+
+    setMapType(currentMapType);
 
     map.on("click", (event) => {
       addPoint({
         lat: event.latlng.lat,
         lng: event.latlng.lng
       });
-
-      setStatus("Ponto acrescentado ao percurso.");
     });
 
-    setTimeout(() => map.invalidateSize(), 150);
+    return true;
   }
 
-  function setTileLayer(type) {
+  function setMapType(type) {
     if (!map) return;
 
-    // Usa apenas os estilos de mapa disponíveis.
-    const selectedType = tileSources[type] ? type : "satellite";
-    const source = tileSources[selectedType];
-
-    if (tileLayer) {
-      map.removeLayer(tileLayer);
+    if (!tileLayers[type]) {
+      type = "satellite";
     }
 
-    tileLayer = L.tileLayer(source.url, source.options);
-
-    tileLayer.on("tileerror", () => {
-      setStatus(
-        "Algumas imagens do mapa não carregaram. Verifica a ligação à Internet."
-      );
+    Object.values(tileLayers).forEach((layer) => {
+      if (map.hasLayer(layer)) {
+        map.removeLayer(layer);
+      }
     });
 
-    tileLayer.addTo(map);
-
-    // Mantém sempre o seletor atualizado.
-    if (el.mapType && el.mapType.value !== selectedType) {
-      el.mapType.value = selectedType;
-    }
+    tileLayers[type].addTo(map);
+    currentMapType = type;
   }
 
-  function updateRouteLine() {
-    if (!routeLine) return;
+  /* ----------------------------------------------------------
+     MARCADORES E SELEÇÃO
+     ---------------------------------------------------------- */
 
-    const latLngs = points.map((point) => [
-      point.lat,
-      point.lng
-    ]);
+  function createPointIcon(index, selected = false) {
+    const color = selected ? "#ef4444" : "#22c55e";
 
-    if (
-      el.routeType.value === "circular" &&
-      points.length > 2 &&
-      distanceBetween(points[0], points[points.length - 1]) > 2
-    ) {
-      latLngs.push([points[0].lat, points[0].lng]);
+    return L.divIcon({
+      className: "gpx-point-icon-wrapper",
+      html: `
+        <span
+          class="gpx-point-marker ${selected ? "selected" : ""}"
+          style="--point-color:${color}"
+          title="${selected ? "Ponto selecionado" : "Ponto " + (index + 1)}"
+        >${index + 1}</span>
+      `,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16]
+    });
+  }
+
+  function selectPoint(index) {
+    if (index < 0 || index >= points.length) return;
+
+    selectedPointIndex = index;
+
+    updateMarkers();
+    updateEditButtons();
+
+    if (el.mapHint) {
+      el.mapHint.textContent =
+        `Ponto ${index + 1} selecionado. Podes eliminá-lo ou arrastá-lo.`;
     }
 
-    routeLine.setLatLngs(latLngs);
-
-    const accent = getComputedStyle(document.body)
-      .getPropertyValue("--accent")
-      .trim();
-
-    routeLine.setStyle({
-      color: accent || "#fc642d"
-    });
+    setStatus(`Ponto ${index + 1} selecionado.`);
   }
 
   function updateMarkers() {
     if (!map) return;
 
-    markers.forEach((marker) => map.removeLayer(marker));
+    markers.forEach((marker) => {
+      map.removeLayer(marker);
+    });
+
     markers = [];
 
     points.forEach((point, index) => {
-      const marker = L.marker(
-        [point.lat, point.lng],
-        {
-          draggable: true,
-          autoPan: true,
-          title: `Ponto ${index + 1}`
-        }
-      ).addTo(map);
+      const marker = L.marker([point.lat, point.lng], {
+        draggable: true,
+        icon: createPointIcon(index, index === selectedPointIndex),
+        riseOnHover: true,
+        keyboard: true
+      });
 
-      marker.bindTooltip(`Ponto ${index + 1}`);
+      marker.addTo(map);
 
-      marker.on("dragend", () => {
-        const position = marker.getLatLng();
-
-        points[index] = {
-          lat: position.lat,
-          lng: position.lng
-        };
-
-        clearAltitudeData();
-        updateRouteLine();
-        updateStats();
-        updateMarkers();
-
-        setStatus(
-          `Localização do ponto ${index + 1} atualizada.`
-        );
+      marker.on("click", () => {
+        selectPoint(index);
       });
 
       marker.on("contextmenu", () => {
         removePoint(index);
       });
 
+      marker.on("dragstart", () => {
+        saveUndoState();
+        selectedPointIndex = index;
+      });
+
+      marker.on("dragend", (event) => {
+        const position = event.target.getLatLng();
+
+        points[index] = {
+          lat: position.lat,
+          lng: position.lng
+        };
+
+        selectedPointIndex = index;
+
+        updateRouteLine();
+        updateMarkers();
+        updateStats();
+        updateEditButtons();
+
+        setStatus(`Ponto ${index + 1} reposicionado.`);
+      });
+
       markers.push(marker);
     });
   }
 
+  /* ----------------------------------------------------------
+     PONTOS: ADICIONAR, ELIMINAR, LIMPAR
+     ---------------------------------------------------------- */
+
   function addPoint(point) {
-    if (
-      !Number.isFinite(point.lat) ||
-      !Number.isFinite(point.lng)
-    ) {
-      return;
-    }
+    saveUndoState();
 
     points.push({
-      lat: point.lat,
-      lng: point.lng
+      lat: Number(point.lat),
+      lng: Number(point.lng)
     });
 
-    clearAltitudeData();
-    updateMarkers();
-    updateRouteLine();
-    updateStats();
+    selectedPointIndex = points.length - 1;
 
-    setHint("Arrasta os marcadores para ajustar o percurso.");
+    clearAltitudeData(false);
+    updateRouteLine();
+    updateMarkers();
+    updateStats();
+    updateEditButtons();
+
+    if (el.mapHint) {
+      el.mapHint.textContent =
+        `Ponto ${points.length} adicionado. Clica num marcador para o selecionar.`;
+    }
+
+    setStatus(`Ponto ${points.length} adicionado ao percurso.`);
   }
 
   function removePoint(index) {
     if (index < 0 || index >= points.length) return;
 
+    saveUndoState();
+
     points.splice(index, 1);
+    selectedPointIndex = null;
 
-    clearAltitudeData();
-    updateMarkers();
+    clearAltitudeData(false);
     updateRouteLine();
+    updateMarkers();
     updateStats();
+    renderElevationChart();
+    updateEditButtons();
 
-    setStatus("Ponto removido.");
+    if (el.mapHint) {
+      el.mapHint.textContent =
+        "Ponto eliminado. Clica no mapa para adicionar mais pontos.";
+    }
+
+    setStatus("Ponto eliminado.");
+  }
+
+  function deleteSelectedPoint() {
+    if (
+      selectedPointIndex === null ||
+      selectedPointIndex < 0 ||
+      selectedPointIndex >= points.length
+    ) {
+      setStatus("Clica primeiro num marcador para selecionar o ponto.");
+      return;
+    }
+
+    removePoint(selectedPointIndex);
+  }
+
+  function clearRoute() {
+    if (points.length === 0) {
+      setStatus("Não existem pontos para limpar.");
+      return;
+    }
+
+    saveUndoState();
+
+    requestNumber++;
+    points = [];
+    altitudes = [];
+    selectedPointIndex = null;
+
+    updateRouteLine();
+    updateMarkers();
+    updateStats();
+    renderElevationChart();
+    updateEditButtons();
+
+    if (el.elevationStatus) {
+      el.elevationStatus.textContent = "À espera de um percurso.";
+    }
+
+    if (el.mapHint) {
+      el.mapHint.textContent = "Clica no mapa para adicionar pontos.";
+    }
+
+    setStatus("Todos os pontos foram removidos.");
+  }
+
+  function newRoute() {
+    if (points.length > 0 || altitudes.length > 0) {
+      saveUndoState();
+    }
+
+    requestNumber++;
+    points = [];
+    altitudes = [];
+    selectedPointIndex = null;
+
+    updateRouteLine();
+    updateMarkers();
+    updateStats();
+    renderElevationChart();
+    updateEditButtons();
+
+    if (map) {
+      map.setView([39.5, -8.0], 7);
+    }
+
+    if (el.elevationStatus) {
+      el.elevationStatus.textContent = "À espera de um percurso.";
+    }
+
+    if (el.mapHint) {
+      el.mapHint.textContent = "Novo percurso. Clica no mapa para começar.";
+    }
+
+    setStatus("Novo percurso iniciado.");
+  }
+
+  /* ----------------------------------------------------------
+     LINHA DO PERCURSO E ESTATÍSTICAS
+     ---------------------------------------------------------- */
+
+  function updateRouteLine() {
+    if (!map) return;
+
+    if (routeLine) {
+      map.removeLayer(routeLine);
+      routeLine = null;
+    }
+
+    if (points.length >= 2) {
+      routeLine = L.polyline(
+        points.map((point) => [point.lat, point.lng]),
+        {
+          color: themeColors[currentTheme] || "#ff7a18",
+          weight: 5,
+          opacity: 0.9,
+          lineCap: "round",
+          lineJoin: "round"
+        }
+      ).addTo(map);
+    }
   }
 
   function fitRoute() {
@@ -358,530 +513,520 @@
     if (points.length === 1) {
       map.setView(
         [points[0].lat, points[0].lng],
-        15
+        Math.max(map.getZoom(), 14)
       );
       return;
     }
 
-    const bounds = L.latLngBounds(
-      points.map((point) => [point.lat, point.lng])
-    );
-
-    map.fitBounds(bounds, {
-      padding: [35, 35],
-      maxZoom: 16
-    });
-  }
-
-  /* -------------------- CRIAR PERCURSOS -------------------- */
-
-  function createRoute() {
-    if (!map) return;
-
-    const distanceKm = Number(el.routeDistance.value);
-
-    if (
-      !Number.isFinite(distanceKm) ||
-      distanceKm < 0.5 ||
-      distanceKm > 100
-    ) {
-      setStatus("Indica uma distância entre 0,5 e 100 km.");
-      return;
-    }
-
-    const center = map.getCenter();
-    const targetMeters = distanceKm * 1000;
-
-    points = [];
-    clearAltitudeData();
-
-    if (el.routeType.value === "circular") {
-      // Circuito aproximado; não segue automaticamente estradas ou trilhos.
-      const count = Math.max(
-        24,
-        Math.min(120, Math.ceil(distanceKm * 5))
-      );
-
-      const radius = targetMeters / (2 * Math.PI);
-      const latRadians = center.lat * Math.PI / 180;
-      const latOffset = radius / 111320;
-      const lngOffset = radius /
-        (111320 * Math.max(0.15, Math.cos(latRadians)));
-
-      for (let i = 0; i < count; i++) {
-        const angle = (2 * Math.PI * i) / count;
-
-        points.push({
-          lat: center.lat + latOffset * Math.sin(angle),
-          lng: center.lng + lngOffset * Math.cos(angle)
-        });
+    map.fitBounds(
+      L.latLngBounds(points.map((point) => [point.lat, point.lng])),
+      {
+        padding: [35, 35],
+        maxZoom: 16
       }
-    } else {
-      // Segmento inicial em linha reta, de comprimento aproximado.
-      const latRadians = center.lat * Math.PI / 180;
-      const latOffset = (targetMeters / 2) / 111320;
-      const lngOffset = (targetMeters / 2) /
-        (111320 * Math.max(0.15, Math.cos(latRadians)));
-
-      points = [
-        {
-          lat: center.lat,
-          lng: center.lng - lngOffset
-        },
-        {
-          lat: center.lat,
-          lng: center.lng + lngOffset
-        }
-      ];
-    }
-
-    updateMarkers();
-    updateRouteLine();
-    updateStats();
-    fitRoute();
-
-    setHint("Percurso criado. Arrasta os pontos para o ajustar.");
-    setStatus(
-      "Percurso aproximado criado. Ajusta os pontos no mapa."
     );
   }
-
-  function clearRoute() {
-    points = [];
-
-    clearAltitudeData();
-    updateMarkers();
-    updateRouteLine();
-    updateStats();
-
-    setHint("Clica no mapa para adicionar pontos.");
-    setStatus("Percurso limpo.");
-  }
-
-  function newRoute() {
-    clearRoute();
-
-    el.routeDistance.value = "5";
-    el.routeType.value = "linear";
-
-    updateRouteLine();
-    updateStats();
-
-    setStatus("Novo percurso pronto a criar.");
-  }
-
-  /* -------------------- ESTATÍSTICAS -------------------- */
 
   function updateStats() {
-    if (!el.distance) return;
+    if (el.distance) {
+      el.distance.textContent =
+        `${formatNumber(calculateDistanceKm())} km`;
+    }
 
-    const distanceKm = routeDistanceMeters() / 1000;
+    if (el.pointCount) {
+      el.pointCount.textContent = String(points.length);
+    }
 
-    el.distance.textContent = `${formatNumber(distanceKm)} km`;
-    el.pointCount.textContent = String(points.length);
-    el.chartDistance.textContent = `${formatNumber(distanceKm)} km`;
-
-    if (!validAltitudeValues()) {
-      el.altitudeRange.textContent = "— / — m";
-      el.ascent.textContent = "— m";
-      el.descent.textContent = "— m";
+    if (altitudes.length !== points.length || altitudes.length === 0) {
+      if (el.altitudeRange) el.altitudeRange.textContent = "— / — m";
+      if (el.ascent) el.ascent.textContent = "— m";
+      if (el.descent) el.descent.textContent = "— m";
       return;
     }
 
-    const minAltitude = Math.min(...altitudes);
-    const maxAltitude = Math.max(...altitudes);
+    const validAltitudes = altitudes.filter(Number.isFinite);
 
-    el.altitudeRange.textContent =
-      `${formatNumber(minAltitude, 0)} / ${formatNumber(maxAltitude, 0)} m`;
+    if (validAltitudes.length === 0) {
+      if (el.altitudeRange) el.altitudeRange.textContent = "— / — m";
+      if (el.ascent) el.ascent.textContent = "— m";
+      if (el.descent) el.descent.textContent = "— m";
+      return;
+    }
+
+    const min = Math.min(...validAltitudes);
+    const max = Math.max(...validAltitudes);
+
+    if (el.altitudeRange) {
+      el.altitudeRange.textContent =
+        `${formatNumber(min, 0)} / ${formatNumber(max, 0)} m`;
+    }
 
     let totalAscent = 0;
     let totalDescent = 0;
 
     for (let i = 1; i < altitudes.length; i++) {
-      const delta = altitudes[i] - altitudes[i - 1];
+      if (
+        !Number.isFinite(altitudes[i - 1]) ||
+        !Number.isFinite(altitudes[i])
+      ) {
+        continue;
+      }
 
-      if (delta > 0) totalAscent += delta;
-      if (delta < 0) totalDescent += Math.abs(delta);
+      const difference = altitudes[i] - altitudes[i - 1];
+
+      if (difference > 0) {
+        totalAscent += difference;
+      } else {
+        totalDescent += Math.abs(difference);
+      }
     }
 
-    el.ascent.textContent = `${formatNumber(totalAscent, 0)} m`;
-    el.descent.textContent = `${formatNumber(totalDescent, 0)} m`;
+    if (el.ascent) {
+      el.ascent.textContent = `${formatNumber(totalAscent, 0)} m`;
+    }
+
+    if (el.descent) {
+      el.descent.textContent = `${formatNumber(totalDescent, 0)} m`;
+    }
   }
 
-  /* -------------------- ALTIMETRIA -------------------- */
+  function updateEditButtons() {
+    if (el.deletePointBtn) {
+      el.deletePointBtn.disabled =
+        selectedPointIndex === null ||
+        selectedPointIndex < 0 ||
+        selectedPointIndex >= points.length;
+    }
+
+    if (el.undoBtn) {
+      el.undoBtn.disabled = undoHistory.length === 0;
+    }
+
+    if (el.clearRouteBtn) {
+      el.clearRouteBtn.disabled = points.length === 0;
+    }
+
+    if (el.exportBtn) {
+      el.exportBtn.disabled = points.length < 2;
+    }
+
+    if (el.loadElevationBtn) {
+      el.loadElevationBtn.disabled = points.length < 2;
+    }
+  }
+
+  /* ----------------------------------------------------------
+     CRIAR PERCURSO AUTOMÁTICO
+     ---------------------------------------------------------- */
+
+  function createRoute() {
+    if (!map) return;
+
+    saveUndoState();
+
+    const routeType = el.routeType?.value || "linear";
+    const center = map.getCenter();
+    const targetDistance = DEFAULT_DISTANCE_KM * 1000;
+    const generated = [];
+
+    if (routeType === "circular") {
+      const radius = targetDistance / (2 * Math.PI);
+      const latitudeScale = 111320;
+      const longitudeScale = Math.max(
+        1000,
+        111320 * Math.cos(center.lat * Math.PI / 180)
+      );
+
+      const count = 40;
+
+      for (let i = 0; i < count; i++) {
+        const angle = 2 * Math.PI * i / count;
+
+        generated.push({
+          lat: center.lat +
+            radius * Math.sin(angle) / latitudeScale,
+          lng: center.lng +
+            radius * Math.cos(angle) / longitudeScale
+        });
+      }
+
+      generated.push({ ...generated[0] });
+    } else {
+      const latitudeScale = 111320;
+      const longitudeScale = Math.max(
+        1000,
+        111320 * Math.cos(center.lat * Math.PI / 180)
+      );
+
+      const northMetres = targetDistance / 2;
+      const eastMetres = targetDistance / 2;
+
+      generated.push({
+        lat: center.lat - northMetres / latitudeScale,
+        lng: center.lng - eastMetres / longitudeScale
+      });
+
+      generated.push({
+        lat: center.lat + northMetres / latitudeScale,
+        lng: center.lng + eastMetres / longitudeScale
+      });
+    }
+
+    requestNumber++;
+    points = generated;
+    altitudes = [];
+    selectedPointIndex = null;
+
+    updateRouteLine();
+    updateMarkers();
+    updateStats();
+    renderElevationChart();
+    fitRoute();
+    updateEditButtons();
+
+    if (el.elevationStatus) {
+      el.elevationStatus.textContent = "Altimetria por carregar.";
+    }
+
+    if (el.mapHint) {
+      el.mapHint.textContent =
+        "Percurso criado. Podes selecionar, arrastar ou eliminar pontos.";
+    }
+
+    setStatus(
+      `Percurso ${routeType === "circular" ? "circular" : "linear"} criado.`
+    );
+  }
+
+  /* ----------------------------------------------------------
+     APARÊNCIA
+     ---------------------------------------------------------- */
+
+  function setTheme(theme) {
+    currentTheme = themeColors[theme] ? theme : "dark";
+
+    document.documentElement.dataset.theme = currentTheme;
+    document.body.dataset.theme = currentTheme;
+
+    updateRouteLine();
+    updateMarkers();
+    renderElevationChart();
+  }
+
+  /* ----------------------------------------------------------
+     ALTIMETRIA — OPEN-METEO
+     ---------------------------------------------------------- */
+
+  function clearAltitudeData(render = true) {
+    requestNumber++;
+    altitudes = [];
+
+    if (el.elevationStatus) {
+      el.elevationStatus.textContent =
+        points.length >= 2
+          ? "Altimetria por carregar."
+          : "À espera de um percurso.";
+    }
+
+    if (render) {
+      updateStats();
+      renderElevationChart();
+    }
+  }
 
   async function loadElevation() {
     if (points.length < 2) {
-      setElevationStatus(
-        "Adiciona pelo menos dois pontos antes de carregar a altimetria."
-      );
-      setStatus("O percurso precisa de pelo menos dois pontos.");
+      setStatus("Adiciona pelo menos dois pontos antes de carregar a altimetria.");
       return;
     }
 
-    if (elevationLoading) return;
-
-    elevationLoading = true;
-    el.loadElevationBtn.disabled = true;
-
     const thisRequest = ++requestNumber;
-    const snapshot = points.map((point) => ({ ...point }));
+    const locations = clonePoints();
 
-    setElevationStatus("A obter dados de altitude...");
-    setStatus("A carregar altimetria.");
+    if (el.loadElevationBtn) {
+      el.loadElevationBtn.disabled = true;
+      el.loadElevationBtn.textContent = "A carregar…";
+    }
+
+    if (el.elevationStatus) {
+      el.elevationStatus.textContent = "A carregar dados de elevação…";
+    }
+
+    if (el.elevationChart) {
+      el.elevationChart.innerHTML = "<p>A obter dados de altimetria…</p>";
+    }
 
     try {
       const results = [];
 
-      for (let start = 0; start < snapshot.length; start += 50) {
+      for (let i = 0; i < locations.length; i += 100) {
         if (thisRequest !== requestNumber) return;
 
-        const batch = snapshot.slice(start, start + 50);
-        const latitudes = batch.map((p) => p.lat).join(",");
-        const longitudes = batch.map((p) => p.lng).join(",");
+        const chunk = locations.slice(i, i + 100);
+        const latitude = chunk.map((point) => point.lat).join(",");
+        const longitude = chunk.map((point) => point.lng).join(",");
 
         const url =
-          `${ALTITUDE_API}?latitude=${encodeURIComponent(latitudes)}` +
-          `&longitude=${encodeURIComponent(longitudes)}`;
+          "https://api.open-meteo.com/v1/elevation" +
+          `?latitude=${encodeURIComponent(latitude)}` +
+          `&longitude=${encodeURIComponent(longitude)}`;
 
         const response = await fetch(url);
 
         if (!response.ok) {
-          throw new Error(
-            `O serviço de altitude respondeu com o código ${response.status}.`
-          );
+          throw new Error("Não foi possível obter os dados de elevação.");
         }
 
         const data = await response.json();
 
         if (!Array.isArray(data.elevation)) {
-          throw new Error(
-            "A resposta do serviço não contém altitudes válidas."
-          );
+          throw new Error("A resposta da altimetria não é válida.");
         }
 
-        results.push(...data.elevation.map((value) => {
-          if (
-            value === null ||
-            value === undefined ||
-            value === ""
-          ) {
-            return null;
-          }
-
-          const number = Number(value);
-          return Number.isFinite(number) ? number : null;
-        }));
+        results.push(...data.elevation.map(Number));
       }
 
       if (thisRequest !== requestNumber) return;
 
-      const routeChanged =
-        snapshot.length !== points.length ||
-        snapshot.some((point, index) =>
-          point.lat !== points[index].lat ||
-          point.lng !== points[index].lng
-        );
-
-      if (routeChanged) {
-        throw new Error(
-          "O percurso mudou durante o carregamento. Tenta novamente."
-        );
-      }
-
-      if (
-        results.length !== points.length ||
-        results.some((value) => !Number.isFinite(value))
-      ) {
-        throw new Error(
-          "Não foi possível obter uma altitude válida para cada ponto."
-        );
+      if (results.length !== points.length) {
+        throw new Error("Os dados recebidos não correspondem aos pontos.");
       }
 
       altitudes = results;
 
-      updateStats();
-      drawElevationChart();
+      if (el.elevationStatus) {
+        el.elevationStatus.textContent = "Altimetria carregada.";
+      }
 
-      setElevationStatus("Altimetria carregada.");
-      setStatus("Altitudes atualizadas com sucesso.");
+      updateStats();
+      renderElevationChart();
+
+      setStatus("Altimetria carregada com sucesso.");
     } catch (error) {
       if (thisRequest !== requestNumber) return;
 
-      console.error("Erro ao carregar altimetria:", error);
+      console.error("Erro de altimetria:", error);
 
-      setElevationStatus(
-        error instanceof TypeError
-          ? "Falha de ligação ao serviço de altitude. Verifica a Internet e tenta novamente."
-          : error.message
-      );
+      if (el.elevationStatus) {
+        el.elevationStatus.textContent = "Não foi possível carregar a altimetria.";
+      }
 
-      setStatus("Não foi possível carregar a altimetria.");
+      if (el.elevationChart) {
+        el.elevationChart.innerHTML =
+          "<p>Não foi possível carregar a altimetria. Verifica a ligação à Internet e tenta novamente.</p>";
+      }
+
+      setStatus("Erro ao carregar a altimetria.");
     } finally {
       if (thisRequest === requestNumber) {
-        elevationLoading = false;
-        el.loadElevationBtn.disabled = false;
+        if (el.loadElevationBtn) {
+          el.loadElevationBtn.textContent = "Carregar altimetria";
+        }
+
+        updateEditButtons();
       }
     }
   }
 
-  /* -------------------- GRÁFICO DE ELEVAÇÃO -------------------- */
+  function renderElevationChart() {
+    if (!el.elevationChart) return;
 
-  function renderChartPlaceholder(message) {
-    chartCanvas = null;
+    const totalDistance = calculateDistanceKm();
 
-    el.elevationChart.replaceChildren();
+    if (el.chartDistance) {
+      el.chartDistance.textContent = `${formatNumber(totalDistance)} km`;
+    }
 
-    const paragraph = document.createElement("p");
-    paragraph.textContent = message;
-
-    el.elevationChart.appendChild(paragraph);
-  }
-
-  function createChartCanvas() {
-    el.elevationChart.replaceChildren();
-
-    chartCanvas = document.createElement("canvas");
-
-    chartCanvas.setAttribute("role", "img");
-    chartCanvas.setAttribute(
-      "aria-label",
-      "Gráfico do perfil de elevação do percurso"
-    );
-
-    el.elevationChart.appendChild(chartCanvas);
-  }
-
-  function drawElevationChart() {
-    if (!validAltitudeValues()) {
-      renderChartPlaceholder(
-        "Carrega a altimetria para visualizar o perfil."
-      );
+    if (points.length < 2) {
+      el.elevationChart.innerHTML =
+        "<p>Cria um percurso e carrega a altimetria.</p>";
       return;
     }
 
-    if (!chartCanvas || !chartCanvas.isConnected) {
-      createChartCanvas();
+    if (altitudes.length !== points.length) {
+      el.elevationChart.innerHTML =
+        "<p>Carrega a altimetria para visualizar o perfil de elevação.</p>";
+      return;
     }
 
-    const canvas = chartCanvas;
-    const width = Math.max(
-      280,
-      Math.floor(el.elevationChart.clientWidth)
-    );
-    const height = 230;
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const values = altitudes.filter(Number.isFinite);
 
-    canvas.width = Math.floor(width * dpr);
-    canvas.height = Math.floor(height * dpr);
-    canvas.style.width = "100%";
-    canvas.style.height = `${height}px`;
+    if (values.length < 2) {
+      el.elevationChart.innerHTML =
+        "<p>Não existem dados de elevação suficientes para desenhar o perfil.</p>";
+      return;
+    }
 
-    const ctx = canvas.getContext("2d");
-
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, width, height);
-
-    const style = getComputedStyle(document.body);
-
-    const textColor =
-      style.getPropertyValue("--text-muted").trim() || "#9ba8b6";
-
-    const accent =
-      style.getPropertyValue("--accent").trim() || "#fc642d";
-
-    const border =
-      style.getPropertyValue("--border").trim() || "#303b48";
+    const width = Math.max(el.elevationChart.clientWidth || 600, 280);
+    const height = 220;
 
     const padding = {
-      top: 22,
-      right: 18,
-      bottom: 32,
-      left: 48
+      top: 18,
+      right: 16,
+      bottom: 30,
+      left: 45
     };
 
-    const graphWidth = width - padding.left - padding.right;
-    const graphHeight = height - padding.top - padding.bottom;
+    const minAltitude = Math.min(...values);
+    const maxAltitude = Math.max(...values);
+    const range = Math.max(1, maxAltitude - minAltitude);
 
-    const minAltitude = Math.min(...altitudes);
-    const maxAltitude = Math.max(...altitudes);
-    const altitudeRange = Math.max(1, maxAltitude - minAltitude);
-    const distances = cumulativeDistancesKm();
-    const totalDistance = Math.max(
-      0.001,
-      routeDistanceMeters() / 1000
-    );
+    const plotWidth = width - padding.left - padding.right;
+    const plotHeight = height - padding.top - padding.bottom;
 
-    const x = (index) => {
-      if (points.length <= 1) return padding.left;
+    const cumulativeDistances = [0];
 
-      return padding.left +
-        (distances[index] / totalDistance) * graphWidth;
-    };
-
-    const y = (altitude) =>
-      padding.top +
-      (1 - (altitude - minAltitude) / altitudeRange) * graphHeight;
-
-    // Grelha e etiquetas de altitude.
-    ctx.strokeStyle = border;
-    ctx.lineWidth = 1;
-    ctx.fillStyle = textColor;
-    ctx.font = "10px Arial";
-    ctx.textAlign = "right";
-    ctx.textBaseline = "middle";
-
-    for (let i = 0; i <= 3; i++) {
-      const fraction = i / 3;
-      const yy = padding.top + fraction * graphHeight;
-      const altitude = maxAltitude - fraction * altitudeRange;
-
-      ctx.beginPath();
-      ctx.moveTo(padding.left, yy);
-      ctx.lineTo(width - padding.right, yy);
-      ctx.stroke();
-
-      ctx.fillText(
-        `${Math.round(altitude)} m`,
-        padding.left - 7,
-        yy
+    for (let i = 1; i < points.length; i++) {
+      cumulativeDistances.push(
+        cumulativeDistances[i - 1] +
+        haversine(points[i - 1], points[i]) / 1000
       );
     }
 
-    // Área preenchida sob o perfil.
-    const gradient = ctx.createLinearGradient(
-      0,
-      padding.top,
-      0,
-      padding.top + graphHeight
-    );
+    const profileDistance =
+      cumulativeDistances[cumulativeDistances.length - 1];
 
-    gradient.addColorStop(0, accent + "66");
-    gradient.addColorStop(1, accent + "08");
+    const coords = altitudes.map((altitude, index) => {
+      const distanceFraction = profileDistance > 0
+        ? cumulativeDistances[index] / profileDistance
+        : index / Math.max(1, altitudes.length - 1);
 
-    ctx.beginPath();
-    ctx.moveTo(x(0), padding.top + graphHeight);
-
-    for (let i = 0; i < altitudes.length; i++) {
-      ctx.lineTo(x(i), y(altitudes[i]));
-    }
-
-    ctx.lineTo(
-      x(altitudes.length - 1),
-      padding.top + graphHeight
-    );
-
-    ctx.closePath();
-    ctx.fillStyle = gradient;
-    ctx.fill();
-
-    // Linha do perfil.
-    ctx.beginPath();
-
-    altitudes.forEach((altitude, index) => {
-      if (index === 0) {
-        ctx.moveTo(x(index), y(altitude));
-      } else {
-        ctx.lineTo(x(index), y(altitude));
-      }
+      return {
+        x: padding.left + distanceFraction * plotWidth,
+        y: padding.top +
+          ((maxAltitude - altitude) / range) * plotHeight
+      };
     });
 
-    ctx.strokeStyle = accent;
-    ctx.lineWidth = 2.5;
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    ctx.stroke();
+    const linePath = coords.map((point, index) =>
+      `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`
+    ).join(" ");
 
-    // Pontos inicial e final.
-    for (const index of [0, altitudes.length - 1]) {
-      ctx.beginPath();
-      ctx.arc(x(index), y(altitudes[index]), 3.5, 0, Math.PI * 2);
-      ctx.fillStyle = accent;
-      ctx.fill();
-    }
+    const bottomY = height - padding.bottom;
 
-    ctx.fillStyle = textColor;
-    ctx.font = "10px Arial";
-    ctx.textBaseline = "alphabetic";
-    ctx.textAlign = "left";
-    ctx.fillText("0 km", padding.left, height - 10);
+    const areaPath =
+      `${linePath} ` +
+      `L ${coords[coords.length - 1].x} ${bottomY} ` +
+      `L ${coords[0].x} ${bottomY} Z`;
 
-    ctx.textAlign = "right";
-    ctx.fillText(
-      `${formatNumber(totalDistance)} km`,
-      width - padding.right,
-      height - 10
-    );
+    const color = themeColors[currentTheme] || "#ff7a18";
+
+    el.elevationChart.innerHTML = `
+      <svg
+        viewBox="0 0 ${width} ${height}"
+        width="100%"
+        role="img"
+        aria-label="Gráfico de altimetria do percurso"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <linearGradient id="elevationGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="${color}" stop-opacity="0.38"/>
+            <stop offset="100%" stop-color="${color}" stop-opacity="0.02"/>
+          </linearGradient>
+        </defs>
+
+        <line
+          x1="${padding.left}"
+          y1="${padding.top}"
+          x2="${padding.left}"
+          y2="${bottomY}"
+          stroke="currentColor"
+          stroke-opacity="0.18"
+        />
+
+        <line
+          x1="${padding.left}"
+          y1="${bottomY}"
+          x2="${width - padding.right}"
+          y2="${bottomY}"
+          stroke="currentColor"
+          stroke-opacity="0.18"
+        />
+
+        <path d="${areaPath}" fill="url(#elevationGradient)"/>
+
+        <path
+          d="${linePath}"
+          fill="none"
+          stroke="${color}"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+
+        <text
+          x="${padding.left - 7}"
+          y="${padding.top + 4}"
+          text-anchor="end"
+          font-size="10"
+          fill="currentColor"
+        >${Math.round(maxAltitude)} m</text>
+
+        <text
+          x="${padding.left - 7}"
+          y="${bottomY}"
+          text-anchor="end"
+          font-size="10"
+          fill="currentColor"
+        >${Math.round(minAltitude)} m</text>
+
+        <text
+          x="${padding.left}"
+          y="${height - 7}"
+          font-size="10"
+          fill="currentColor"
+        >0 km</text>
+
+        <text
+          x="${width - padding.right}"
+          y="${height - 7}"
+          text-anchor="end"
+          font-size="10"
+          fill="currentColor"
+        >${formatNumber(profileDistance)} km</text>
+      </svg>
+    `;
   }
 
-  /* -------------------- EXPORTAÇÃO GPX -------------------- */
+  /* ----------------------------------------------------------
+     EXPORTAR GPX
+     ---------------------------------------------------------- */
 
   function exportGPX() {
     if (points.length < 2) {
-      setStatus(
-        "Adiciona pelo menos dois pontos antes de exportar."
-      );
+      setStatus("Adiciona pelo menos dois pontos para exportar um GPX.");
       return;
     }
 
-    const escapeXML = (value) => String(value)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&apos;");
-
-    const hasAltitude = validAltitudeValues();
-
     const trackPoints = points.map((point, index) => {
-      const elevation = hasAltitude
-        ? `\n      <ele>${altitudes[index].toFixed(1)}</ele>`
+      const elevation = altitudes[index];
+
+      const elevationTag = Number.isFinite(elevation)
+        ? `<ele>${elevation.toFixed(1)}</ele>`
         : "";
 
-      return (
-        `      <trkpt lat="${point.lat.toFixed(7)}" lon="${point.lng.toFixed(7)}">` +
-        `${elevation}\n      </trkpt>`
-      );
-    });
-
-    // Fecha o circuito no ponto inicial, quando necessário.
-    if (
-      el.routeType.value === "circular" &&
-      points.length > 2 &&
-      distanceBetween(points[0], points[points.length - 1]) > 2
-    ) {
-      const first = points[0];
-
-      const elevation = hasAltitude
-        ? `\n      <ele>${altitudes[0].toFixed(1)}</ele>`
-        : "";
-
-      trackPoints.push(
-        `      <trkpt lat="${first.lat.toFixed(7)}" lon="${first.lng.toFixed(7)}">` +
-        `${elevation}\n      </trkpt>`
-      );
-    }
-
-    const now = new Date().toISOString();
-
-    const name = el.routeType.value === "circular"
-      ? "Percurso circular"
-      : "Percurso linear";
+      return `
+      <trkpt lat="${point.lat.toFixed(7)}" lon="${point.lng.toFixed(7)}">
+        ${elevationTag}
+      </trkpt>`;
+    }).join("");
 
     const gpx = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1"
-     creator="GPX Run Studio"
-     xmlns="http://www.topografix.com/GPX/1/1"
-     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-     xsi:schemaLocation="http://www.topografix.com/GPX/1/1 https://www.topografix.com/GPX/1/1/gpx.xsd">
+<gpx
+  version="1.1"
+  creator="GPX Run Studio"
+  xmlns="http://www.topografix.com/GPX/1/1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd"
+>
   <metadata>
-    <name>${escapeXML(name)}</name>
-    <time>${now}</time>
+    <name>GPX Run Studio</name>
   </metadata>
   <trk>
-    <name>${escapeXML(name)}</name>
+    <name>Meu percurso</name>
     <trkseg>
-${trackPoints.join("\n")}
+      ${trackPoints}
     </trkseg>
   </trk>
 </gpx>`;
@@ -902,86 +1047,228 @@ ${trackPoints.join("\n")}
 
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-    setStatus(
-      hasAltitude
-        ? "Ficheiro GPX exportado com altitudes."
-        : "Ficheiro GPX exportado sem altitudes. Carrega a altimetria para as incluir."
-    );
+    setStatus("Ficheiro GPX exportado.");
   }
 
-  /* -------------------- TEMA E EVENTOS -------------------- */
+  /* ----------------------------------------------------------
+     IMPORTAR GPX
+     ---------------------------------------------------------- */
 
-  function applyTheme(theme) {
-    if (!themes.includes(theme)) theme = "dark";
+  function ensureImportInput() {
+    let input = $("importGPXInput");
 
-    document.documentElement.dataset.theme = theme;
-    document.body.dataset.theme = theme;
-    document.documentElement.style.colorScheme =
-      theme === "light" ? "light" : "dark";
+    if (input) return input;
 
-    if (el.themeSelect.value !== theme) {
-      el.themeSelect.value = theme;
-    }
+    input = document.createElement("input");
+    input.id = "importGPXInput";
+    input.type = "file";
+    input.accept = ".gpx,application/gpx+xml,application/xml,text/xml";
+    input.hidden = true;
 
-    updateRouteLine();
+    document.body.appendChild(input);
 
-    if (validAltitudeValues()) {
-      drawElevationChart();
-    }
-  }
+    input.addEventListener("change", async () => {
+      const file = input.files?.[0];
 
-  function bindEvents() {
-    el.createRouteBtn.addEventListener("click", createRoute);
-    el.clearRouteBtn.addEventListener("click", clearRoute);
-    el.newRouteBtn.addEventListener("click", newRoute);
-    el.exportBtn.addEventListener("click", exportGPX);
-    el.loadElevationBtn.addEventListener("click", loadElevation);
+      if (!file) return;
 
-    el.mapType.addEventListener("change", () => {
-      setTileLayer(el.mapType.value);
-      setStatus("Estilo do mapa atualizado.");
-    });
-
-    el.themeSelect.addEventListener("change", () => {
-      applyTheme(el.themeSelect.value);
-    });
-
-    el.routeType.addEventListener("change", () => {
-      updateRouteLine();
-      updateStats();
-    });
-
-    window.addEventListener("resize", () => {
-      if (map) map.invalidateSize();
-
-      if (validAltitudeValues()) {
-        drawElevationChart();
+      try {
+        const text = await file.text();
+        importGPX(text);
+      } catch (error) {
+        console.error(error);
+        setStatus("Não foi possível ler o ficheiro GPX.");
+      } finally {
+        input.value = "";
       }
     });
+
+    return input;
   }
 
-  /* -------------------- ARRANQUE -------------------- */
+  function importGPX(gpxText) {
+    const parser = new DOMParser();
+    const documentGPX = parser.parseFromString(
+      gpxText,
+      "application/xml"
+    );
 
-  function init() {
-    if (!el.map || !el.elevationChart) {
-      console.error(
-        "Não foram encontrados os elementos essenciais do HTML."
-      );
+    if (documentGPX.querySelector("parsererror")) {
+      setStatus("O ficheiro GPX não tem um formato válido.");
       return;
     }
 
-    renderChartPlaceholder(
-      "Cria um percurso e carrega a altimetria."
+    const trackPoints = Array.from(
+      documentGPX.getElementsByTagNameNS("*", "trkpt")
     );
 
+    const routePoints = Array.from(
+      documentGPX.getElementsByTagNameNS("*", "rtept")
+    );
+
+    const wayPoints = Array.from(
+      documentGPX.getElementsByTagNameNS("*", "wpt")
+    );
+
+    const sourcePoints = trackPoints.length
+      ? trackPoints
+      : routePoints.length
+        ? routePoints
+        : wayPoints;
+
+    const importedPoints = [];
+    const importedAltitudes = [];
+
+    sourcePoints.forEach((node) => {
+      const lat = Number(node.getAttribute("lat"));
+      const lng = Number(node.getAttribute("lon"));
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+      importedPoints.push({ lat, lng });
+
+      const elevationNode =
+        node.getElementsByTagNameNS("*", "ele")[0];
+
+      const elevation = elevationNode
+        ? Number(elevationNode.textContent)
+        : NaN;
+
+      importedAltitudes.push(
+        Number.isFinite(elevation) ? elevation : NaN
+      );
+    });
+
+    if (importedPoints.length < 2) {
+      setStatus("O ficheiro GPX não contém pontos suficientes.");
+      return;
+    }
+
+    saveUndoState();
+
+    requestNumber++;
+    points = importedPoints;
+
+    altitudes = importedAltitudes.some(Number.isFinite)
+      ? importedAltitudes
+      : [];
+
+    selectedPointIndex = null;
+
+    updateRouteLine();
+    updateMarkers();
     updateStats();
-    applyTheme(el.themeSelect.value || "dark");
+    renderElevationChart();
+    fitRoute();
+    updateEditButtons();
 
-    initMap();
+    if (el.elevationStatus) {
+      el.elevationStatus.textContent = altitudes.length
+        ? "Altitudes importadas do ficheiro GPX."
+        : "Altimetria por carregar.";
+    }
 
-    if (!map) return;
+    if (el.mapHint) {
+      el.mapHint.textContent =
+        "GPX importado. Clica num marcador para selecionar um ponto.";
+    }
+
+    setStatus(`GPX importado: ${points.length} pontos.`);
+  }
+
+  function addImportButton() {
+    if (!el.exportBtn || $("importGPXBtn")) return;
+
+    const button = document.createElement("button");
+
+    button.id = "importGPXBtn";
+    button.type = "button";
+    button.className = "secondary-button";
+    button.textContent = "↑ Importar GPX";
+
+    button.addEventListener("click", () => {
+      ensureImportInput().click();
+    });
+
+    el.exportBtn.parentNode?.insertBefore(button, el.exportBtn);
+  }
+
+  /* ----------------------------------------------------------
+     EVENTOS
+     ---------------------------------------------------------- */
+
+  function bindEvents() {
+    el.createRouteBtn?.addEventListener("click", createRoute);
+
+    el.deletePointBtn?.addEventListener(
+      "click",
+      deleteSelectedPoint
+    );
+
+    el.undoBtn?.addEventListener("click", undoLastChange);
+
+    el.clearRouteBtn?.addEventListener("click", clearRoute);
+
+    el.newRouteBtn?.addEventListener("click", newRoute);
+
+    el.exportBtn?.addEventListener("click", exportGPX);
+
+    el.loadElevationBtn?.addEventListener(
+      "click",
+      loadElevation
+    );
+
+    el.mapType?.addEventListener("change", () => {
+      setMapType(el.mapType.value);
+    });
+
+    el.themeSelect?.addEventListener("change", () => {
+      setTheme(el.themeSelect.value);
+    });
+
+    el.routeType?.addEventListener("change", () => {
+      const newRouteType = el.routeType.value;
+
+      if (newRouteType !== lastRouteType) {
+        saveUndoState(lastRouteType);
+        lastRouteType = newRouteType;
+      }
+
+      setStatus("Tipo de percurso atualizado.");
+    });
+
+    window.addEventListener("resize", () => {
+      if (map) {
+        map.invalidateSize();
+      }
+
+      renderElevationChart();
+    });
+  }
+
+  /* ----------------------------------------------------------
+     INICIALIZAÇÃO
+     ---------------------------------------------------------- */
+
+  function init() {
+    if (!initMap()) return;
+
+    lastRouteType = el.routeType?.value || "linear";
 
     bindEvents();
+    addImportButton();
+    updateRouteLine();
+    updateMarkers();
+    updateStats();
+    renderElevationChart();
+    updateEditButtons();
+    setTheme(currentTheme);
+
+    if (el.mapHint) {
+      el.mapHint.textContent =
+        "Clica no mapa para adicionar pontos. Clica num marcador para o selecionar.";
+    }
+
     setStatus("Pronto para criar um percurso.");
   }
 
